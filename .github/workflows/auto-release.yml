@@ -1,0 +1,136 @@
+name: Auto Release
+
+# Continuous releases from trunk.
+# Every push to master: run the full test suite, bump the patch version, build the
+# JAR, commit the version bump, tag it and publish a GitHub release with the JAR
+# attached. The Docker image for the new tag is then built by docker-publish.yml.
+#
+# Version rule: the pom.xml version (minus any -SNAPSHOT suffix) is used as-is when
+# no tag exists for it yet, so a manual minor/major bump in pom.xml is honoured.
+# Otherwise the patch number is incremented until an unused tag is found.
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '.github/**'
+      - 'README.md'
+      - 'LICENSE'
+      - 'CNAME'
+      - 'docs/**'
+      - '*.example.yml'
+      - '*.example.yaml'
+      - '.circleci/**'
+
+# Releases must never run concurrently: two runs would fight over the version bump.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Test, Build and Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Guard against loops if the version-bump commit is ever pushed with a token
+    # that does trigger workflows (pushes made with GITHUB_TOKEN never do).
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write   # push the version bump + tag, create the release
+      actions: write    # dispatch docker-publish for the new tag
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history: needed to inspect existing tags
+
+      - name: Set up Java Environment
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compute next version
+        id: version
+        run: |
+          set -euo pipefail
+          POM_VERSION=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          BASE="${POM_VERSION%-SNAPSHOT}"
+          if ! [[ "$BASE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::pom.xml version '$POM_VERSION' is not MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+          git fetch --tags --quiet
+          NEXT="$BASE"
+          if git rev-parse -q --verify "refs/tags/v$NEXT" >/dev/null; then
+            IFS=. read -r MAJOR MINOR PATCH <<< "$BASE"
+            while git rev-parse -q --verify "refs/tags/v$NEXT" >/dev/null; do
+              PATCH=$((PATCH + 1))
+              NEXT="$MAJOR.$MINOR.$PATCH"
+            done
+          fi
+
+          echo "pom_version=$POM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Releasing $NEXT (pom.xml was $POM_VERSION)"
+
+      - name: Set version in pom.xml
+        if: steps.version.outputs.pom_version != steps.version.outputs.next
+        run: |
+          mvn -B -q versions:set -DnewVersion=${{ steps.version.outputs.next }}
+          mvn -B -q versions:commit
+
+      - name: Test and build
+        run: |
+          COMMIT_TIME=$(git log -1 --format=%cI)
+          mvn --batch-mode verify -Dproject.build.outputTimestamp=$COMMIT_TIME
+
+      - name: Rename JAR
+        run: mv target/*-All.jar JMusicBot-${{ steps.version.outputs.next }}.jar
+
+      - name: Commit version bump and tag
+        id: tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add pom.xml
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: bump version to ${{ steps.version.outputs.next }} [skip ci]"
+            # Another commit may have landed on master while we were building; rebase once and retry.
+            git push origin HEAD:master || (git pull --rebase origin master && git push origin HEAD:master)
+          fi
+
+          git tag -a "v${{ steps.version.outputs.next }}" -m "Release v${{ steps.version.outputs.next }}"
+          git push origin "v${{ steps.version.outputs.next }}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: v${{ steps.version.outputs.next }}
+          commit: ${{ steps.tag.outputs.sha }}
+          name: v${{ steps.version.outputs.next }}
+          draft: false
+          prerelease: false
+          generateReleaseNotes: true
+          artifacts: "JMusicBot-${{ steps.version.outputs.next }}.jar"
+          body: |
+            Automated release from master (${{ github.sha }}).
+
+            ---
+            ### Setup
+            https://jmusicbot.com/setup
+            https://jmusicbot.com/config
+            # Download: [JMusicBot-${{ steps.version.outputs.next }}.jar](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.next }}/JMusicBot-${{ steps.version.outputs.next }}.jar)
+
+      - name: Publish Docker image for the new tag
+        # Tags pushed with GITHUB_TOKEN do not fire other workflows' push triggers,
+        # so docker-publish.yml is dispatched explicitly on the new tag.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docker-publish.yml --ref "v${{ steps.version.outputs.next }}"

@@ -5,14 +5,14 @@
 > This is a fork of [JMusicBot](https://github.com/jagrosh/MusicBot) from jagrosh and arif-banai
 > I wanted to make a few tweaks without interfering with the main repo.
 
-[![Downloads](https://img.shields.io/github/downloads/arif-banai/MusicBot/total.svg)](https://github.com/arif-banai/MusicBot/releases/latest)
-[![Stars](https://img.shields.io/github/stars/arif-banai/MusicBot.svg)](https://github.com/arif-banai/MusicBot/stargazers)
-[![Release](https://img.shields.io/github/release/arif-banai/MusicBot.svg)](https://github.com/arif-banai/MusicBot/releases/latest)
-[![License](https://img.shields.io/github/license/arif-banai/MusicBot.svg)](https://github.com/arif-banai/MusicBot/blob/master/LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/ragnarrok/JMusicBot/total.svg)](https://github.com/ragnarrok/JMusicBot/releases/latest)
+[![Stars](https://img.shields.io/github/stars/ragnarrok/JMusicBot.svg)](https://github.com/ragnarrok/JMusicBot/stargazers)
+[![Release](https://img.shields.io/github/release/ragnarrok/JMusicBot.svg)](https://github.com/ragnarrok/JMusicBot/releases/latest)
+[![License](https://img.shields.io/github/license/ragnarrok/JMusicBot.svg)](https://github.com/ragnarrok/JMusicBot/blob/master/LICENSE)
 [![Discord](https://discordapp.com/api/guilds/1453856673004392634/widget.png?v=1)](https://discord.gg/cyyUxNmmx6) <br>
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/arif-banai/MusicBot/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/arif-banai/MusicBot/tree/master)
-[![Build and Test](https://github.com/arif-banai/MusicBot/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/arif-banai/MusicBot/actions/workflows/build-and-test.yml)
-[![CodeFactor](https://www.codefactor.io/repository/github/arif-banai/musicbot/badge)](https://www.codefactor.io/repository/github/arif-banai/musicbot)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/ragnarrok/JMusicBot/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/ragnarrok/JMusicBot/tree/master)
+[![Build and Test](https://github.com/ragnarrok/JMusicBot/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/ragnarrok/JMusicBot/actions/workflows/build-and-test.yml)
+[![CodeFactor](https://www.codefactor.io/repository/github/ragnarrok/jmusicbot/badge)](https://www.codefactor.io/repository/github/ragnarrok/jmusicbot)
 
 A cross-platform Discord music bot with a clean interface, and that is easy to set up and run yourself!
 
@@ -132,7 +132,7 @@ If you already have a directory with your `config.txt`, `Playlists/` folder, and
 docker run --rm -it \
   --name jmusicbot \
   -v "$(pwd):/musicbot" \
-  ghcr.io/arif-banai/musicbot:latest
+  ghcr.io/ragnarrok/jmusicbot:latest
 ```
 
 This mounts your current directory as the musicbot volume, so the bot will use your existing configuration and playlists.
@@ -146,7 +146,7 @@ This mounts your current directory as the musicbot volume, so the bot will use y
    docker run --rm -it \
      --name jmusicbot \
      -v "/path/to/musicbot:/musicbot" \
-     ghcr.io/arif-banai/musicbot:latest
+     ghcr.io/ragnarrok/jmusicbot:latest
    ```
 
 2. **First Run:**
@@ -169,7 +169,7 @@ Example `docker-compose.yml`:
 ```yaml
 services:
   jmusicbot:
-    image: ghcr.io/arif-banai/musicbot:latest
+    image: ghcr.io/ragnarrok/jmusicbot:latest
     container_name: jmusicbot
     volumes:
       - /path/to/musicbot:/musicbot
@@ -183,15 +183,15 @@ Check the [Docker Compose Example](docker-compose.example.yml) for more details.
 - **Config Persistence:** The `/musicbot` volume **must** be mounted for your configuration to persist. The bot reads and writes `config.txt` from `/musicbot` (the container's working directory).
 - **First Run:** If `config.txt` doesn't exist, the bot will generate a default one automatically. You'll need to edit it with your bot token before the bot can start.
 - **Image Tags:** 
-  - Use `ghcr.io/arif-banai/musicbot:latest` for the latest build from the master branch
-  - Use `ghcr.io/arif-banai/musicbot:0.7.0` (replace with actual version) to pin a specific release version
+  - Use `ghcr.io/ragnarrok/jmusicbot:latest` for the latest build from the master branch
+  - Use `ghcr.io/ragnarrok/jmusicbot:0.7.0` (replace with actual version) to pin a specific release version
   - Every build is also tagged `sha-<commit>`. Maintainers can publish `preview-<branch>` images for any ref by running the "Publish Preview Image" workflow manually
   - **Recommendation:** For production, pin your image tag rather than using `latest`
 - **File Permissions:** The container runs as the non-root user `jmusicbot` (UID 10001). Make sure the mounted directory is writable by that UID (`chown 10001:10001 /path/to/musicbot`), or set `user:` in your compose file to your own UID/GID.
 - **JAVA_OPTS:** The container uses ZGC and AlwaysPreTouch by default. Set `JAVA_OPTS` to add heap limits (e.g. `-Xms256m -Xmx512m`) or other flags. See [Performance Tuning](#performance-tuning) for details.
 
 
-To view published images, visit: `https://github.com/arif-banai/MusicBot/pkgs/container/musicbot`
+To view published images, visit: `https://github.com/ragnarrok/JMusicBot/pkgs/container/jmusicbot`
 
 ## Performance Tuning
 
@@ -330,6 +330,8 @@ This project follows a **trunk-based development** workflow. The `master` branch
 
 Branch names are automatically validated by CI to ensure consistency (lowercase letters, digits and hyphens only; `feat/` is not accepted, use `feature/`). For detailed information about the development workflow, branch naming rules, and best practices, see [DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md). An overview of the code structure lives in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+Every code push to `master` is tested and, if green, automatically released: the patch version is bumped, a `vX.Y.Z` tag and GitHub release with the JAR are created, and a matching Docker image is published. Bump the minor or major version in `pom.xml` yourself when a change warrants it.
+
 To build from source you need JDK 25+ and Maven 3.9+:
 
 ```bash
@@ -339,13 +341,13 @@ mvn verify
 The runnable jar is written to `target/JMusicBot-<version>-All.jar`.
 
 ## Questions/Suggestions/Bug Reports
-**Please read the [Issues List](https://github.com/arif-banai/MusicBot/issues) before suggesting a feature**. 
+**Please read the [Issues List](https://github.com/ragnarrok/JMusicBot/issues) before suggesting a feature**. 
 
-If you have a question, need troubleshooting help, or want to brainstorm a new feature, please start a [Discussion](https://github.com/arif-banai/MusicBot/discussions).
+If you have a question, need troubleshooting help, or want to brainstorm a new feature, please start a [Discussion](https://github.com/ragnarrok/JMusicBot/discussions).
 
 The Discord server is also available for questions and suggestions. [Click here to join](https://discord.gg/cyyUxNmmx6).
 
- If you'd like to suggest a feature or report a reproducible bug, please open an [Issue](https://github.com/arif-banai/MusicBot/issues) on this repository. If you like this bot, be sure to add a star to the libraries that make this possible: 
+ If you'd like to suggest a feature or report a reproducible bug, please open an [Issue](https://github.com/ragnarrok/JMusicBot/issues) on this repository. If you like this bot, be sure to add a star to the libraries that make this possible: 
  - [**JDA**](https://github.com/discord-jda/JDA)
  - [**lavaplayer**](https://github.com/lavalink-devs/lavaplayer)
  - [**youtube-source**](https://github.com/lavalink-devs/youtube-source)

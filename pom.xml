@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.arifbanai</groupId>
     <artifactId>JMusicBot</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.1</version>
     <packaging>jar</packaging>
 
     <name>JMusicBot</name>
@@ -42,23 +42,31 @@
                 <role>maintainer</role>
             </roles>
         </developer>
+        <developer>
+            <id>ragnarrok</id>
+            <name>Cohen Singh</name>
+            <url>https://github.com/ragnarrok</url>
+            <roles>
+                <role>fork maintainer</role>
+            </roles>
+        </developer>
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/arif-banai/MusicBot.git</connection>
-        <developerConnection>scm:git:git@github.com:arif-banai/MusicBot.git</developerConnection>
-        <url>https://github.com/arif-banai/MusicBot</url>
+        <connection>scm:git:https://github.com/ragnarrok/JMusicBot.git</connection>
+        <developerConnection>scm:git:git@github.com:ragnarrok/JMusicBot.git</developerConnection>
+        <url>https://github.com/ragnarrok/JMusicBot</url>
         <tag>HEAD</tag>
     </scm>
 
     <issueManagement>
         <system>GitHub Issues</system>
-        <url>https://github.com/arif-banai/MusicBot/issues</url>
+        <url>https://github.com/ragnarrok/JMusicBot/issues</url>
     </issueManagement>
 
     <ciManagement>
         <system>GitHub Actions</system>
-        <url>https://github.com/arif-banai/MusicBot/actions</url>
+        <url>https://github.com/ragnarrok/JMusicBot/actions</url>
     </ciManagement>
 
     <repositories>

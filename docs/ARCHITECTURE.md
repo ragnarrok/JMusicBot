@@ -5,7 +5,7 @@
 > |-------|-------|
 > | Generated | 2026-01-25 |
 > | Branch | `slash-commands-v1` |
-> | Commit | `c0f0a21` ([c0f0a214a50121a5b66ba28917a57013d9cb6a5f](https://github.com/arif-banai/MusicBot/commit/c0f0a214a50121a5b66ba28917a57013d9cb6a5f)) |
+> | Commit | `c0f0a21` ([c0f0a214a50121a5b66ba28917a57013d9cb6a5f](https://github.com/ragnarrok/JMusicBot/commit/c0f0a214a50121a5b66ba28917a57013d9cb6a5f)) |
 > | Version | `v0.6.1-21-gc0f0a21` (0.6.2-slash-commands) |
 > | Base Commit Message | "Refactor music service and command structure" |
 
