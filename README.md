@@ -2,8 +2,8 @@
 
 # JMusicBot
 > [!NOTE]
-> This is a fork of [JMusicBot](https://github.com/jagrosh/MusicBot) from jagrosh
-> I started this because it was not maintained and was not working anymore.
+> This is a fork of [JMusicBot](https://github.com/jagrosh/MusicBot) from jagrosh and arif-banai
+> I wanted to make a few tweaks without interfering with the main repo.
 
 [![Downloads](https://img.shields.io/github/downloads/arif-banai/MusicBot/total.svg)](https://github.com/arif-banai/MusicBot/releases/latest)
 [![Stars](https://img.shields.io/github/stars/arif-banai/MusicBot.svg)](https://github.com/arif-banai/MusicBot/stargazers)
