@@ -17,9 +17,11 @@ package com.jagrosh.jmusicbot.unit.audio;
 
 import com.jagrosh.jmusicbot.TestBase;
 import com.jagrosh.jmusicbot.audio.AudioHandler;
+import com.jagrosh.jmusicbot.audio.NowPlayingHandler;
 import com.jagrosh.jmusicbot.audio.QueuedTrack;
 import com.jagrosh.jmusicbot.settings.QueueType;
 import com.jagrosh.jmusicbot.settings.RepeatMode;
+import com.sedmelluq.discord.lavaplayer.tools.Units;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
@@ -29,7 +31,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -51,7 +57,15 @@ public class AudioHandlerTest extends TestBase {
         when(settings.getQueueType()).thenReturn(QueueType.FAIR);
         when(settings.getRepeatMode()).thenReturn(RepeatMode.OFF);
 
-        // AudioHandler's constructor is not visible, so use reflection to instantiate it for testing
+        audioHandler = newHandler();
+    }
+
+    /**
+     * AudioHandler's constructor is not visible, so use reflection to instantiate it for testing.
+     * Config-dependent state (e.g. stream persistence) is read in the constructor, so tests that
+     * stub config must call this again afterwards.
+     */
+    private AudioHandler newHandler() {
         try {
             var constructor = AudioHandler.class.getDeclaredConstructor(
                     playerManager.getClass().getInterfaces().length > 0 ? playerManager.getClass().getInterfaces()[0] : playerManager.getClass(),
@@ -59,7 +73,7 @@ public class AudioHandlerTest extends TestBase {
                     audioPlayer.getClass().getInterfaces().length > 0 ? audioPlayer.getClass().getInterfaces()[0] : audioPlayer.getClass()
             );
             constructor.setAccessible(true);
-            audioHandler = (AudioHandler) constructor.newInstance(playerManager, guild, audioPlayer);
+            return (AudioHandler) constructor.newInstance(playerManager, guild, audioPlayer);
         } catch (Exception e) {
             throw new RuntimeException("Failed to instantiate AudioHandler via reflection", e);
         }
@@ -459,6 +473,306 @@ public class AudioHandlerTest extends TestBase {
             when(queuedTrack.getTrack()).thenReturn(track);
             when(queuedTrack.getIdentifier()).thenReturn(0L);
             audioHandler.getQueue().add(queuedTrack);
+        }
+    }
+
+    // ==================== Stream Persistence Tests ====================
+
+    @Nested
+    @DisplayName("Stream Persistence")
+    class StreamPersistenceTests
+    {
+        private static final String STREAM_URI = "https://radio.example.com/listen/station/radio.mp3";
+
+        // Created manually: TestBase only opens @Mock fields on the outer test instance.
+        private final ScheduledFuture<?> scheduledFuture = mock(ScheduledFuture.class);
+
+        private void enablePersistence(int maxAttempts)
+        {
+            when(config.persistStreams()).thenReturn(true);
+            when(config.getStreamReconnectDelaySeconds()).thenReturn(5L);
+            when(config.getStreamReconnectMaxDelaySeconds()).thenReturn(60L);
+            when(config.getStreamReconnectMaxAttempts()).thenReturn(maxAttempts);
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+            doReturn(scheduledFuture).when(threadpool).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+            audioHandler = newHandler();
+        }
+
+        private AudioTrack createStreamTrack()
+        {
+            AudioTrack track = mock(AudioTrack.class);
+            AudioTrack clone = mock(AudioTrack.class);
+            AudioTrackInfo info = new AudioTrackInfo("Station", "Azuracast", Units.DURATION_MS_UNKNOWN, "stream-id", true, STREAM_URI);
+            when(track.getInfo()).thenReturn(info);
+            when(track.getIdentifier()).thenReturn("stream-id");
+            when(track.makeClone()).thenReturn(clone);
+            return track;
+        }
+
+        private AudioTrack createRegularTrack()
+        {
+            AudioTrack track = mock(AudioTrack.class);
+            AudioTrack clone = mock(AudioTrack.class);
+            AudioTrackInfo info = new AudioTrackInfo("Song", "Artist", 180_000, "song-id", false, "https://example.com/song");
+            when(track.getInfo()).thenReturn(info);
+            when(track.getIdentifier()).thenReturn("song-id");
+            when(track.makeClone()).thenReturn(clone);
+            return track;
+        }
+
+        private AudioTrack enqueue(AudioTrack track)
+        {
+            QueuedTrack queuedTrack = mock(QueuedTrack.class);
+            when(queuedTrack.getTrack()).thenReturn(track);
+            when(queuedTrack.getIdentifier()).thenReturn(0L);
+            audioHandler.getQueue().add(queuedTrack);
+            return track;
+        }
+
+        private Runnable captureScheduledReconnect(long expectedDelaySeconds)
+        {
+            ArgumentCaptor<Runnable> captor = ArgumentCaptor.forClass(Runnable.class);
+            verify(threadpool).schedule(captor.capture(), eq(expectedDelaySeconds), eq(TimeUnit.SECONDS));
+            return captor.getValue();
+        }
+
+        private void verifyNoReconnectScheduled()
+        {
+            verify(threadpool, never()).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+        }
+
+        @Test
+        @DisplayName("persistence disabled: dropped stream ends the queue as before")
+        void disabled_droppedStreamEndsQueue()
+        {
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.FINISHED);
+
+            verifyNoReconnectScheduled();
+            verify(bot).closeAudioConnection(GUILD_ID);
+            assertFalse(audioHandler.isStreamReconnectPending());
+        }
+
+        @Test
+        @DisplayName("FINISHED stream schedules a reconnect instead of leaving the channel")
+        void finishedStream_schedulesReconnect()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.FINISHED);
+
+            Runnable reconnect = captureScheduledReconnect(5);
+            verify(bot, never()).closeAudioConnection(anyLong());
+            assertTrue(audioHandler.getQueue().isEmpty());
+            assertTrue(audioHandler.isStreamReconnectPending());
+
+            when(audioPlayer.getPlayingTrack()).thenReturn(null);
+            reconnect.run();
+
+            verify(audioPlayer).playTrack(stream.makeClone());
+            assertFalse(audioHandler.isStreamReconnectPending());
+        }
+
+        @Test
+        @DisplayName("LOAD_FAILED stream reconnects with a growing delay")
+        void loadFailed_backsOff()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+
+            verify(threadpool).schedule(any(Runnable.class), eq(5L), eq(TimeUnit.SECONDS));
+            verify(threadpool).schedule(any(Runnable.class), eq(10L), eq(TimeUnit.SECONDS));
+            verify(threadpool).schedule(any(Runnable.class), eq(20L), eq(TimeUnit.SECONDS));
+            verify(bot, never()).closeAudioConnection(anyLong());
+        }
+
+        @Test
+        @DisplayName("user skip (STOPPED) of a stream plays the next track and does not reconnect")
+        void userStop_doesNotReconnect()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+            AudioTrack next = enqueue(createRegularTrack());
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.STOPPED);
+
+            verifyNoReconnectScheduled();
+            verify(audioPlayer).playTrack(next);
+        }
+
+        @Test
+        @DisplayName("REPLACED stream does not reconnect")
+        void replaced_doesNotReconnect()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+            enqueue(createRegularTrack());
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.REPLACED);
+
+            verifyNoReconnectScheduled();
+        }
+
+        @Test
+        @DisplayName("stalled stream is stopped and then reconnected")
+        void stalledStream_isRestarted()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackStuck(audioPlayer, stream, 10_000L);
+            verify(audioPlayer).stopTrack();
+
+            // Lavaplayer fires the end event for the stop we just issued.
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.STOPPED);
+
+            captureScheduledReconnect(5);
+            verify(bot, never()).closeAudioConnection(anyLong());
+        }
+
+        @Test
+        @DisplayName("stall of a regular track is not restarted")
+        void stalledRegularTrack_notRestarted()
+        {
+            enablePersistence(0);
+            AudioTrack song = createRegularTrack();
+
+            audioHandler.onTrackStuck(audioPlayer, song, 10_000L);
+
+            verify(audioPlayer, never()).stopTrack();
+        }
+
+        @Test
+        @DisplayName("reconnect is skipped when another track started playing meanwhile")
+        void reconnect_skippedWhenSomethingElsePlaying()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.FINISHED);
+            Runnable reconnect = captureScheduledReconnect(5);
+
+            when(audioPlayer.getPlayingTrack()).thenReturn(mock(AudioTrack.class));
+            reconnect.run();
+
+            verify(audioPlayer, never()).playTrack(any());
+        }
+
+        @Test
+        @DisplayName("stopAndClear() cancels a pending reconnect")
+        void stopAndClear_cancelsPendingReconnect()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.FINISHED);
+            Runnable reconnect = captureScheduledReconnect(5);
+            assertTrue(audioHandler.isStreamReconnectPending());
+
+            audioHandler.stopAndClear();
+
+            verify(scheduledFuture).cancel(false);
+            assertFalse(audioHandler.isStreamReconnectPending());
+
+            // Even if the task still fires, it must not resurrect the stream.
+            when(audioPlayer.getPlayingTrack()).thenReturn(null);
+            reconnect.run();
+            verify(audioPlayer, never()).playTrack(any());
+        }
+
+        @Test
+        @DisplayName("stopAndClearQueuePreserveHistory() cancels a pending reconnect")
+        void stopAndClearPreserveHistory_cancelsPendingReconnect()
+        {
+            enablePersistence(0);
+            AudioTrack stream = createStreamTrack();
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.FINISHED);
+            Runnable reconnect = captureScheduledReconnect(5);
+
+            audioHandler.stopAndClearQueuePreserveHistory();
+
+            verify(scheduledFuture).cancel(false);
+            when(audioPlayer.getPlayingTrack()).thenReturn(null);
+            reconnect.run();
+            verify(audioPlayer, never()).playTrack(any());
+        }
+
+        @Test
+        @DisplayName("gives up after the configured attempt limit and ends the queue normally")
+        void attemptLimit_reached_endsQueue()
+        {
+            enablePersistence(2);
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+            verify(bot, never()).closeAudioConnection(anyLong());
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+
+            verify(threadpool, times(2)).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+            verify(bot).closeAudioConnection(GUILD_ID);
+        }
+
+        @Test
+        @DisplayName("regular (non-stream) track that finishes is never reconnected")
+        void regularTrack_notReconnected()
+        {
+            enablePersistence(0);
+            AudioTrack song = createRegularTrack();
+            AudioTrack next = enqueue(createRegularTrack());
+
+            audioHandler.onTrackEnd(audioPlayer, song, AudioTrackEndReason.FINISHED);
+
+            verifyNoReconnectScheduled();
+            verify(audioPlayer).playTrack(next);
+        }
+
+        @Test
+        @DisplayName("zero delay reconnects immediately without the scheduler")
+        void zeroDelay_reconnectsInline()
+        {
+            when(config.persistStreams()).thenReturn(true);
+            when(config.getStreamReconnectDelaySeconds()).thenReturn(0L);
+            when(config.getStreamReconnectMaxDelaySeconds()).thenReturn(0L);
+            when(config.getStreamReconnectMaxAttempts()).thenReturn(0);
+            audioHandler = newHandler();
+            AudioTrack stream = createStreamTrack();
+            when(audioPlayer.getPlayingTrack()).thenReturn(null);
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.FINISHED);
+
+            verifyNoReconnectScheduled();
+            verify(audioPlayer).playTrack(stream.makeClone());
+        }
+
+        @Test
+        @DisplayName("attempt counter resets after the stream has played stably")
+        void attemptCounter_resetsAfterStablePlayback()
+        {
+            enablePersistence(1);
+            AudioTrack stream = createStreamTrack();
+
+            // First drop uses the single allowed attempt.
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+            verify(threadpool, times(1)).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+
+            // The reconnected stream plays for a while: frames flow and position passes the threshold.
+            AudioTrack playing = createStreamTrack();
+            when(playing.getPosition()).thenReturn(AudioHandler.STREAM_STABLE_PLAYBACK_MS + 1);
+            when(audioPlayer.getPlayingTrack()).thenReturn(playing);
+            when(audioPlayer.provide()).thenReturn(mock(com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame.class));
+            assertTrue(audioHandler.canProvide());
+
+            // A later drop is allowed one attempt again rather than giving up.
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.LOAD_FAILED);
+            verify(threadpool, times(2)).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+            verify(bot, never()).closeAudioConnection(anyLong());
         }
     }
 }

@@ -45,7 +45,74 @@ class BotConfigUnitTest extends BaseConfigTest {
         super.setUpBase();
         MockitoAnnotations.openMocks(this);
     }
-    
+
+    @Nested
+    @DisplayName("Stream Persistence Tests")
+    class StreamPersistenceTests {
+
+        private BotConfig load(String extraLines) throws IOException {
+            String configContent = """
+                meta {
+                  configVersion = 2
+                }
+                discord.token = test_token
+                discord.owner = 123456789
+                """ + extraLines;
+            Path configFile = createTempConfigFile(configContent);
+            setConfigFileProperty(configFile);
+
+            BotConfig config = new BotConfig(mockUserInteraction);
+            config.load();
+            assertTrue(config.isValid());
+            return config;
+        }
+
+        @Test
+        @DisplayName("Stream persistence is off by default with sane reconnect defaults")
+        void streamPersistenceDefaults() throws IOException {
+            BotConfig config = load("");
+
+            assertFalse(config.persistStreams());
+            assertEquals(5L, config.getStreamReconnectDelaySeconds());
+            assertEquals(60L, config.getStreamReconnectMaxDelaySeconds());
+            assertEquals(0, config.getStreamReconnectMaxAttempts());
+        }
+
+        @Test
+        @DisplayName("Stream persistence values are read from config")
+        void streamPersistenceExplicitValues() throws IOException {
+            BotConfig config = load("""
+                playback.streams.persist = true
+                playback.streams.reconnectDelaySeconds = 2
+                playback.streams.reconnectMaxDelaySeconds = 30
+                playback.streams.reconnectMaxAttempts = 7
+                """);
+
+            assertTrue(config.persistStreams());
+            assertEquals(2L, config.getStreamReconnectDelaySeconds());
+            assertEquals(30L, config.getStreamReconnectMaxDelaySeconds());
+            assertEquals(7, config.getStreamReconnectMaxAttempts());
+        }
+
+        @Test
+        @DisplayName("Negative or inconsistent reconnect values are clamped")
+        void streamPersistenceClamping() throws IOException {
+            BotConfig config = load("""
+                playback.streams.persist = true
+                playback.streams.reconnectDelaySeconds = 10
+                playback.streams.reconnectMaxDelaySeconds = 1
+                playback.streams.reconnectMaxAttempts = -4
+                """);
+
+            assertEquals(10L, config.getStreamReconnectDelaySeconds());
+            assertEquals(10L, config.getStreamReconnectMaxDelaySeconds(), "max delay is raised to the base delay");
+            assertEquals(0, config.getStreamReconnectMaxAttempts(), "negative attempts mean unlimited");
+
+            BotConfig negativeDelay = load("playback.streams.reconnectDelaySeconds = -3\n");
+            assertEquals(0L, negativeDelay.getStreamReconnectDelaySeconds());
+        }
+    }
+
     @Nested
     @DisplayName("Getters Tests")
     class GettersTests {

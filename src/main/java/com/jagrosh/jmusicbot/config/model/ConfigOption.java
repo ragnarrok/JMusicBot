@@ -57,7 +57,13 @@ public enum ConfigOption {
     UPDATE_ALERTS("updates.alerts", ConfigType.BOOLEAN, false, "Whether to alert owner about updates"),
     USE_EVAL("dangerous.eval", ConfigType.BOOLEAN, false, "Whether to enable eval command (DANGEROUS)"),
     USE_YOUTUBE_OAUTH("playback.youtube.useOAuth", ConfigType.BOOLEAN, false, "Whether to use YouTube OAuth2 for playback"),
-    
+    STREAM_PERSIST("playback.streams.persist", ConfigType.BOOLEAN, false, "Whether live streams that drop unexpectedly are reconnected automatically"),
+
+    // Stream reconnect options
+    STREAM_RECONNECT_DELAY_SECONDS("playback.streams.reconnectDelaySeconds", ConfigType.LONG, false, "Seconds before the first stream reconnect attempt (doubles per attempt)"),
+    STREAM_RECONNECT_MAX_DELAY_SECONDS("playback.streams.reconnectMaxDelaySeconds", ConfigType.LONG, false, "Upper bound in seconds for the stream reconnect delay"),
+    STREAM_RECONNECT_MAX_ATTEMPTS("playback.streams.reconnectMaxAttempts", ConfigType.INT, false, "Max consecutive stream reconnect attempts (0 = unlimited)"),
+
     // Numeric options
     MAX_SECONDS("playback.maxTrackSeconds", ConfigType.LONG, false, "Maximum track length in seconds (0 = no limit)"),
     MAX_YT_PLAYLIST_PAGES("playback.maxYouTubePlaylistPages", ConfigType.INT, false, "Maximum YouTube playlist pages to load"),

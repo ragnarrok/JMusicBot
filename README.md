@@ -22,10 +22,10 @@ This version of JMusicBot changes/updates various dependencies. To ensure your b
 
 *   **Java 25 Minimum:** The bot now requires **Java 25 or higher**. 
 
-*   **LibDave/udpqueue:** You **must** have **glibc >= 2.38**. *If you are using Docker, this is already handled for you.*
+*   **jdave/udpqueue:** You **must** have **glibc >= 2.38**. *If you are using Docker, this is already handled for you.*
 *   **Privileged Gateway Intents:** You **must** enable the **Message Content Intent** in your [Discord Developer Portal](https://discord.com/developers/applications).
     *   *Navigate to: Your Application > Bot > Privileged Gateway Intents > Toggle "Message Content Intent" to ON.*
-    *   *Without this, the bot will not see your commands.*
+    *   *Without this, the bot will not see your prefix commands (e.g. `!play`). Slash commands (`/play`) work without it.*
 
 
 [![Setup](http://i.imgur.com/VvXYp5j.png)](https://jmusicbot.com/setup)
@@ -36,9 +36,12 @@ This version of JMusicBot changes/updates various dependencies. To ensure your b
   * No external keys needed (besides a Discord Bot token)
   * Smooth playback
   * Server-specific setup for the "DJ" role that can moderate the music
+  * Slash commands and interactive playback buttons, alongside classic prefix commands
+  * Playback history (`history` command and a Previous button on the now-playing message)
   * Clean and beautiful menus
   * Supports many sites, including Youtube, Soundcloud, and more
   * Supports many online radio/streams
+  * Optional auto-reconnect for live streams (internet radio, Azuracast) that drop
   * Supports local files
   * Playlist support (both web/youtube, and local)
 
@@ -50,8 +53,12 @@ JMusicBot supports all sources and formats supported by [lavaplayer](https://git
   * Bandcamp
   * Vimeo
   * Twitch streams
+  * Niconico
+  * GetYarn
   * Local files
-  * HTTP URLs
+  * HTTP URLs (direct audio files and internet radio streams such as Azuracast/Icecast/Shoutcast)
+
+Each source can be enabled or disabled individually under `playback.audioSources` in `config.txt`.
 ### Formats
   * MP3
   * FLAC
@@ -74,20 +81,24 @@ When running JMusicBot directly (not in Docker), make sure to pass these JVM fla
 
 **Linux / macOS / Windows (CMD):**
 ```bash
-java -Dfile.encoding=UTF-8 -Dnogui=true --enable-native-access=ALL-UNNAMED -jar JMusicBot-0.6.2-All.jar
+java -Dfile.encoding=UTF-8 -Dnogui=true --enable-native-access=ALL-UNNAMED -jar JMusicBot-0.7.0-All.jar
 ```
 
 **Windows (PowerShell):** PowerShell treats `-D` as its own parameter. Quote each JVM option so they are passed to `java` correctly:
 ```powershell
-java "-Dfile.encoding=UTF-8" "-Dnogui=true" "--enable-native-access=ALL-UNNAMED" "-jar" ".\JMusicBot-0.6.2-All.jar"
+java "-Dfile.encoding=UTF-8" "-Dnogui=true" "--enable-native-access=ALL-UNNAMED" "-jar" ".\JMusicBot-0.7.0-All.jar"
 ```
 Alternatively, use the stop-parsing token so the rest of the line is passed literally: `java --% -Dfile.encoding=UTF-8 -Dnogui=true ...`
 
 `-Dfile.encoding=UTF-8` ensures non-English characters (Cyrillic, Japanese, etc.) display correctly in Discord. On Windows or older JDKs, omitting it can cause mojibake in slash-command autocomplete and embeds.
 
+Omit `-Dnogui=true` if you want the desktop GUI with the performance and health monitors; it can also be turned off permanently with `gui.enabled = false` in `config.txt`.
+
+On Linux/macOS, [`scripts/run_jmusicbot.sh`](scripts/run_jmusicbot.sh) downloads the latest release jar, passes the required flags, and restarts the bot in a loop after the `shutdown` command.
+
 ### Linux System Requirements
 
-**Important:** Your system **must have glibc version 2.38 or higher**. Failure to meet this requirement will result in errors when using JDave and udpqueue.
+**Important:** Your system **must have glibc version 2.38 or higher**. Failure to meet this requirement will result in errors when loading the jdave and udpqueue native libraries.
 
 > **Note:** Ubuntu 24.04 "Noble" and Debian 13 "Trixie" already include a compatible glibc version out of the box.
 
@@ -150,7 +161,7 @@ If you prefer docker-compose, copy the example compose file and update the volum
 ```bash
 cp docker-compose.example.yml docker-compose.yml
 # Edit docker-compose.yml and update the volume path
-docker-compose up -d
+docker compose up -d
 ```
 
 Example `docker-compose.yml`:
@@ -173,8 +184,10 @@ Check the [Docker Compose Example](docker-compose.example.yml) for more details.
 - **First Run:** If `config.txt` doesn't exist, the bot will generate a default one automatically. You'll need to edit it with your bot token before the bot can start.
 - **Image Tags:** 
   - Use `ghcr.io/arif-banai/musicbot:latest` for the latest build from the master branch
-  - Use `ghcr.io/arif-banai/musicbot:0.6.1` (replace with actual version) to pin a specific release version
+  - Use `ghcr.io/arif-banai/musicbot:0.7.0` (replace with actual version) to pin a specific release version
+  - Every build is also tagged `sha-<commit>`. Maintainers can publish `preview-<branch>` images for any ref by running the "Publish Preview Image" workflow manually
   - **Recommendation:** For production, pin your image tag rather than using `latest`
+- **File Permissions:** The container runs as the non-root user `jmusicbot` (UID 10001). Make sure the mounted directory is writable by that UID (`chown 10001:10001 /path/to/musicbot`), or set `user:` in your compose file to your own UID/GID.
 - **JAVA_OPTS:** The container uses ZGC and AlwaysPreTouch by default. Set `JAVA_OPTS` to add heap limits (e.g. `-Xms256m -Xmx512m`) or other flags. See [Performance Tuning](#performance-tuning) for details.
 
 
@@ -199,7 +212,7 @@ java -Dfile.encoding=UTF-8 \
 
 **Flag explanations:**
 - `-Dfile.encoding=UTF-8`: Ensures non-English characters display correctly in Discord (required on Windows or older JDKs)
-- `-XX:+UseZGC`: Sub-millisecond GC pauses (generational mode is default in JDK 24+)
+- `-XX:+UseZGC`: Sub-millisecond GC pauses (generational mode is the default since JDK 23)
 - `-XX:+AlwaysPreTouch`: Pre-allocates memory at startup to avoid page faults
 - `-Xms` / `-Xmx`: Optional; set heap size if you want to limit or fix memory (e.g. `-Xms256m -Xmx512m`)
 
@@ -224,6 +237,35 @@ performance {
 ```
 
 Higher values provide more protection against stuttering but add latency. The defaults (800ms NAS, 2000ms frame buffer) should work well for most setups.
+
+## Live Stream Persistence
+
+Internet radio streams (Azuracast, Icecast, Shoutcast, etc.) occasionally drop: the server restarts, the connection is reset, or the stream stalls and stops sending data. By default the bot treats that like the end of a track and moves on, so the stream has to be queued again by hand.
+
+Turn on stream persistence in `config.txt` and the bot will reconnect to the same stream automatically instead:
+
+```hocon
+playback {
+  streams {
+    # Reconnect live streams that stop unexpectedly
+    persist = true
+
+    # Wait before the first reconnect attempt; doubles after each consecutive failure
+    reconnectDelaySeconds = 5
+    reconnectMaxDelaySeconds = 60
+
+    # Consecutive failed attempts before giving up (0 = retry forever)
+    reconnectMaxAttempts = 0
+  }
+}
+```
+
+**How it works:**
+- Only live streams (tracks with no known duration) are affected. Normal songs, playlists and local files behave exactly as before.
+- A stream is reconnected when it ends on its own, fails to load, or stalls for longer than lavaplayer's stuck threshold (10 seconds). The now-playing message is kept while the bot reconnects.
+- `stop`, `skip`, `forceskip`, `skipto` and playing something else never trigger a reconnect. Queuing another track while a reconnect is pending cancels the reconnect.
+- Each consecutive failure doubles the wait (5s, 10s, 20s, 40s, 60s, 60s, ...). The counter resets once the stream has played for 30 seconds, so a brief blip always retries quickly.
+- Combine with `voice.stayInChannel = true` if you want the bot to stay in the voice channel even when it gives up after `reconnectMaxAttempts`.
 
 ## Proxy Configuration
 
@@ -284,9 +326,17 @@ This project follows a **trunk-based development** workflow. The `master` branch
 - **`fix/<slug>`** - Bug fixes (e.g., `fix/youtube-oauth`)
 - **`chore/<slug>`** - Maintenance tasks (e.g., `chore/update-deps`)
 - **`deps/<slug>`** - Dependency experiments (e.g., `deps/youtube-source-pr195`)
-- **`release/<version>`** - Release stabilization (optional, e.g., `release/0.6.3`)
+- **`release/<version>`** - Release stabilization (optional, e.g., `release/0.7.1`)
 
-Branch names are automatically validated by CI to ensure consistency. For detailed information about the development workflow, branch naming rules, and best practices, see [DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md).
+Branch names are automatically validated by CI to ensure consistency (lowercase letters, digits and hyphens only; `feat/` is not accepted, use `feature/`). For detailed information about the development workflow, branch naming rules, and best practices, see [DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md). An overview of the code structure lives in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+To build from source you need JDK 25+ and Maven 3.9+:
+
+```bash
+mvn verify
+```
+
+The runnable jar is written to `target/JMusicBot-<version>-All.jar`.
 
 ## Questions/Suggestions/Bug Reports
 **Please read the [Issues List](https://github.com/arif-banai/MusicBot/issues) before suggesting a feature**. 
@@ -296,7 +346,7 @@ If you have a question, need troubleshooting help, or want to brainstorm a new f
 The Discord server is also available for questions and suggestions. [Click here to join](https://discord.gg/cyyUxNmmx6).
 
  If you'd like to suggest a feature or report a reproducible bug, please open an [Issue](https://github.com/arif-banai/MusicBot/issues) on this repository. If you like this bot, be sure to add a star to the libraries that make this possible: 
- - [**JDA**](https://github.com/DV8FromTheWorld/JDA)
+ - [**JDA**](https://github.com/discord-jda/JDA)
  - [**lavaplayer**](https://github.com/lavalink-devs/lavaplayer)
  - [**youtube-source**](https://github.com/lavalink-devs/youtube-source)
 
