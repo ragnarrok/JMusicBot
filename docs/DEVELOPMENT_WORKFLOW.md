@@ -131,15 +131,27 @@ The `build-and-test.yml` workflow runs on:
 
 ### Docker Build
 
-The `docker-build.yml` workflow builds and publishes Docker images on:
-- Pushes to `master` ΓåÆ tags as `:latest` and version (if not SNAPSHOT)
-- Pushes to short-lived branches ΓåÆ tags as `:<branch-name>` (e.g., `:feature-new-player-ui`)
-- Version tags (e.g., `v0.6.3`) ΓåÆ tags as `:0.6.3`
+The `docker-publish.yml` workflow builds and publishes Docker images:
+- After a successful "Build and Test" run on `master`: tags as `:latest` and `:sha-<commit>`
+- Version tags (e.g., `v0.7.1`), pushed by hand or dispatched by `auto-release.yml`: tags as `:0.7.1` and `:sha-<commit>`
+- Preview images for any ref can be published manually with `publish-preview-image.yml`: tags as `:preview-<ref>`
 
 **Image tags:**
-- `master`: `ghcr.io/arif-banai/musicbot:latest` (+ version tag if applicable)
-- Feature branch: `ghcr.io/arif-banai/musicbot:feature-new-player-ui`
-- Version tag: `ghcr.io/arif-banai/musicbot:0.6.3`
+- `master`: `ghcr.io/ragnarrok/jmusicbot:latest`
+- Version tag: `ghcr.io/ragnarrok/jmusicbot:0.7.1`
+- Preview: `ghcr.io/ragnarrok/jmusicbot:preview-feature-new-player-ui`
+
+### Auto Release
+
+The `auto-release.yml` workflow runs on every push to `master` that touches code (documentation-only changes are ignored):
+
+1. Runs the full test suite and builds the JAR (`mvn verify`)
+2. Picks the next version: the `pom.xml` version if no tag exists for it yet, otherwise the next free patch number
+3. Commits the version bump to `master` as `github-actions[bot]`, tags it `vX.Y.Z`
+4. Publishes a GitHub release with auto-generated notes and the JAR attached
+5. Dispatches `docker-publish.yml` on the new tag
+
+Because the bump commit and the tag are pushed with the workflow token, they do not trigger further workflow runs, so there is no loop.
 
 ## Best Practices
 
@@ -180,27 +192,18 @@ The `docker-build.yml` workflow builds and publishes Docker images on:
 
 ### Standard Release (from master)
 
-1. **Ensure `master` is stable**
-   - All tests passing
-   - No known critical bugs
-   - Documentation updated
+Releases are automatic. Every code push to `master` that passes the tests becomes a patch release (`0.7.0` → `0.7.1` → `0.7.2` ...) with the JAR attached and a matching Docker image. See [Auto Release](#auto-release) above.
 
-2. **Update version in `pom.xml`**
-   - Set the release version (e.g., `0.6.3`)
-   - Commit: `git commit -m "chore: bump version to 0.6.3"`
+To make a **minor or major** release, bump the version in `pom.xml` in the same PR as the change:
 
-3. **Create release tag**
-   ```bash
-   git tag v0.6.3
-   git push origin v0.6.3
-   ```
+```bash
+mvn versions:set -DnewVersion=0.8.0 && mvn versions:commit
+git commit -am "chore: bump version to 0.8.0"
+```
 
-4. **Use "Make Release" workflow** (optional)
-   - Or manually create GitHub release
-   - Attach JAR file from workflow artifacts
+When that lands on `master`, the auto release uses `0.8.0` as-is (no tag exists for it yet) and continues with `0.8.1` from there.
 
-5. **Docker image is automatically built** from the tag
-   - Tagged as `ghcr.io/arif-banai/musicbot:0.6.3`
+The manual **"Make Release"** workflow still exists for special cases, such as a pre-release from a branch or a release with a hand-written description. Publish its draft promptly: if a code commit lands on `master` while the draft is unpublished, the auto release will claim that version number first.
 
 ### Release Branch (for stabilization)
 

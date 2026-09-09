@@ -65,7 +65,13 @@ public class ConfigPanel extends JPanel {
     private final JSpinner maxYTPlaylistPagesSpinner;
     private final JSpinner skipRatioSpinner;
     private final JCheckBox useYouTubeOAuthCheckBox;
-    
+
+    // Live Streams section
+    private final JCheckBox persistStreamsCheckBox;
+    private final JSpinner reconnectDelaySpinner;
+    private final JSpinner reconnectMaxDelaySpinner;
+    private final JSpinner reconnectMaxAttemptsSpinner;
+
     // UI/Emojis section
     private final JTextField successEmojiField;
     private final JTextField warningEmojiField;
@@ -110,7 +116,14 @@ public class ConfigPanel extends JPanel {
         maxYTPlaylistPagesSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 100, 1));
         skipRatioSpinner = new JSpinner(new SpinnerNumberModel(0.55, 0.0, 1.0, 0.05));
         useYouTubeOAuthCheckBox = new JCheckBox("Use YouTube OAuth for playback");
-        
+
+        // Live Streams
+        persistStreamsCheckBox = new JCheckBox("Reconnect live streams (internet radio / Azuracast) that drop");
+        reconnectDelaySpinner = new JSpinner(new SpinnerNumberModel(5, 0, 3600, 1));
+        reconnectMaxDelaySpinner = new JSpinner(new SpinnerNumberModel(60, 0, 3600, 5));
+        reconnectMaxAttemptsSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 10000, 1));
+        persistStreamsCheckBox.addActionListener(e -> updateStreamControlsEnabled());
+
         // UI/Emojis
         successEmojiField = new JTextField(5);
         warningEmojiField = new JTextField(5);
@@ -135,6 +148,8 @@ public class ConfigPanel extends JPanel {
         contentPanel.add(createVoiceSection());
         contentPanel.add(Box.createVerticalStrut(8));
         contentPanel.add(createPlaybackSection());
+        contentPanel.add(Box.createVerticalStrut(8));
+        contentPanel.add(createStreamsSection());
         contentPanel.add(Box.createVerticalStrut(8));
         contentPanel.add(createEmojisSection());
         contentPanel.add(Box.createVerticalStrut(8));
@@ -292,6 +307,63 @@ public class ConfigPanel extends JPanel {
     }
     
     /**
+     * Creates the Live Streams configuration section (playback.streams.*).
+     */
+    private JPanel createStreamsSection() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(new TitledBorder("Live Streams"));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 8, 4, 8);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        // Row 0: Enable
+        gbc.gridx = 0; gbc.gridy = 0;
+        gbc.gridwidth = 4;
+        panel.add(persistStreamsCheckBox, gbc);
+
+        // Row 1: First delay and max delay
+        gbc.gridx = 0; gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        panel.add(new JLabel("Reconnect Delay (seconds):"), gbc);
+        gbc.gridx = 1;
+        panel.add(reconnectDelaySpinner, gbc);
+
+        gbc.gridx = 2;
+        panel.add(new JLabel("Max Delay (seconds):"), gbc);
+        gbc.gridx = 3;
+        gbc.weightx = 1.0;
+        panel.add(reconnectMaxDelaySpinner, gbc);
+
+        // Row 2: Attempt limit
+        gbc.gridx = 0; gbc.gridy = 2;
+        gbc.weightx = 0;
+        panel.add(new JLabel("Max Attempts (0=unlimited):"), gbc);
+        gbc.gridx = 1;
+        panel.add(reconnectMaxAttemptsSpinner, gbc);
+
+        gbc.gridx = 2;
+        gbc.gridwidth = 2;
+        JLabel hint = new JLabel("<html><i>Delay doubles after each failed attempt, up to the max.</i></html>");
+        hint.setFont(hint.getFont().deriveFont(10f));
+        hint.setForeground(Color.GRAY);
+        panel.add(hint, gbc);
+
+        return panel;
+    }
+
+    /**
+     * Greys out the reconnect tuning fields while stream persistence is disabled.
+     */
+    private void updateStreamControlsEnabled() {
+        boolean enabled = persistStreamsCheckBox.isSelected();
+        reconnectDelaySpinner.setEnabled(enabled);
+        reconnectMaxDelaySpinner.setEnabled(enabled);
+        reconnectMaxAttemptsSpinner.setEnabled(enabled);
+    }
+
+    /**
      * Creates the UI/Emojis configuration section.
      */
     private JPanel createEmojisSection() {
@@ -428,7 +500,14 @@ public class ConfigPanel extends JPanel {
         maxYTPlaylistPagesSpinner.setValue(config.getMaxYTPlaylistPages());
         skipRatioSpinner.setValue(config.getSkipRatio());
         useYouTubeOAuthCheckBox.setSelected(config.useYouTubeOauth());
-        
+
+        // Live Streams
+        persistStreamsCheckBox.setSelected(config.persistStreams());
+        reconnectDelaySpinner.setValue((int) Math.min(3600, config.getStreamReconnectDelaySeconds()));
+        reconnectMaxDelaySpinner.setValue((int) Math.min(3600, config.getStreamReconnectMaxDelaySeconds()));
+        reconnectMaxAttemptsSpinner.setValue(Math.min(10000, config.getStreamReconnectMaxAttempts()));
+        updateStreamControlsEnabled();
+
         // UI/Emojis
         successEmojiField.setText(config.getSuccess());
         warningEmojiField.setText(config.getWarning());
@@ -511,7 +590,13 @@ public class ConfigPanel extends JPanel {
         updates.put("playback.maxYouTubePlaylistPages", String.valueOf(maxYTPlaylistPagesSpinner.getValue()));
         updates.put("playback.skipRatio", String.valueOf(skipRatioSpinner.getValue()));
         updates.put("playback.youtube.useOAuth", String.valueOf(useYouTubeOAuthCheckBox.isSelected()));
-        
+
+        // Live Streams
+        updates.put("playback.streams.persist", String.valueOf(persistStreamsCheckBox.isSelected()));
+        updates.put("playback.streams.reconnectDelaySeconds", String.valueOf(reconnectDelaySpinner.getValue()));
+        updates.put("playback.streams.reconnectMaxDelaySeconds", String.valueOf(reconnectMaxDelaySpinner.getValue()));
+        updates.put("playback.streams.reconnectMaxAttempts", String.valueOf(reconnectMaxAttemptsSpinner.getValue()));
+
         // UI/Emojis
         updates.put("ui.emojis.success", quoteString(successEmojiField.getText()));
         updates.put("ui.emojis.warning", quoteString(warningEmojiField.getText()));
@@ -560,8 +645,10 @@ public class ConfigPanel extends JPanel {
             java.util.regex.Pattern regex = java.util.regex.Pattern.compile(pattern);
             java.util.regex.Matcher matcher = regex.matcher(result);
             
-            // Find the right occurrence based on context (section)
-            String section = key.contains(".") ? key.substring(0, key.indexOf('.')) : null;
+            // Find the right occurrence based on context: the full section path minus the leaf,
+            // so "playback.streams.persist" is looked up inside the "streams {" block rather
+            // than anywhere under "playback {".
+            String section = key.contains(".") ? key.substring(0, key.lastIndexOf('.')) : null;
             
             if (section != null) {
                 // Find section and update within it

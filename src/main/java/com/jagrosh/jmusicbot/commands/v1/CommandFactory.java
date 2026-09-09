@@ -165,7 +165,7 @@ public class CommandFactory {
 
     private static @NotNull AboutCommand createAboutCommand() {
         AboutCommand aboutCommand = new AboutCommand(Color.BLUE.brighter(),
-                "a music bot that is [easy to host yourself!](https://github.com/arif-banai/MusicBot) (v" + OtherUtil.getCurrentVersion() + ")",
+                "a music bot that is [easy to host yourself!](https://github.com/ragnarrok/JMusicBot) (v" + OtherUtil.getCurrentVersion() + ")",
                 new String[]{"High-quality music playback", "FairQueue™ Technology", "Easy to host yourself"},
                 JMusicBot.RECOMMENDED_PERMS);
         aboutCommand.setIsAuthor(false);

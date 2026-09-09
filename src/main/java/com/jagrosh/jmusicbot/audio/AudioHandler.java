@@ -40,6 +40,8 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -52,6 +54,8 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
     public final static String STOP_EMOJI  = "\u23F9"; // ⏹
 
     private final static Logger LOGGER = LoggerFactory.getLogger(AudioHandler.class);
+    /** How long a reconnected stream must play before the consecutive-attempt counter resets. */
+    public static final long STREAM_STABLE_PLAYBACK_MS = 30_000L;
     private final List<AudioTrack> defaultQueue = new LinkedList<>();
     private final Set<String> votes = new HashSet<>();
     
@@ -66,11 +70,20 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
     private String lastReason = null;
     private volatile String favoritedTrackUri = null;
 
+    // Live stream persistence: reconnect streams that drop instead of letting the queue end.
+    private final StreamReconnectPolicy streamReconnect;
+    private final Object reconnectLock = new Object();
+    private ScheduledFuture<?> pendingReconnect;
+    private int reconnectGeneration;
+    /** Set right before the handler stops a stalled stream itself, so the STOPPED end is treated as a drop. */
+    private volatile boolean streamRestartRequested;
+
     protected AudioHandler(PlayerManager manager, Guild guild, AudioPlayer player)
     {
         this.manager = manager;
         this.audioPlayer = player;
         this.guildId = guild.getIdLong();
+        this.streamReconnect = StreamReconnectPolicy.fromConfig(manager.getBot().getConfig());
         // Use NO_OP listener in no-GUI mode to avoid memory allocation
         this.metricsListener = manager.getBot().isNoGUI() 
             ? AudioMetricsListener.NO_OP 
@@ -139,6 +152,7 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
     public void stopAndClear()
     {
         LOGGER.debug("Stopping and clearing queue");
+        cancelStreamReconnect();
         queue.clearAll();
         defaultQueue.clear();
         audioPlayer.stopTrack();
@@ -152,9 +166,111 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
     public void stopAndClearQueuePreserveHistory()
     {
         LOGGER.debug("Stopping playback and clearing queue (preserving history)");
+        cancelStreamReconnect();
         queue.clear();
         defaultQueue.clear();
         audioPlayer.stopTrack();
+    }
+
+    /**
+     * Whether a dropped live stream is currently waiting to be reconnected.
+     */
+    public boolean isStreamReconnectPending()
+    {
+        synchronized (reconnectLock)
+        {
+            return pendingReconnect != null;
+        }
+    }
+
+    /**
+     * Cancels any scheduled stream reconnect and clears the attempt counter.
+     * Called whenever playback is stopped on purpose so a pending reconnect cannot
+     * resurrect a stream the user just stopped.
+     */
+    private void cancelStreamReconnect()
+    {
+        synchronized (reconnectLock)
+        {
+            reconnectGeneration++;
+            if (pendingReconnect != null)
+            {
+                pendingReconnect.cancel(false);
+                pendingReconnect = null;
+            }
+        }
+        streamRestartRequested = false;
+        streamReconnect.reset();
+    }
+
+    /**
+     * If stream persistence is enabled and the ended track is a live stream that dropped
+     * unexpectedly, schedules it to be played again and returns true. Returns false when the
+     * normal end-of-track handling (next song, repeat, leave channel) should run instead.
+     */
+    private boolean scheduleStreamReconnect(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason)
+    {
+        boolean restartRequested = streamRestartRequested;
+        streamRestartRequested = false;
+
+        if (!streamReconnect.isEnabled() || !StreamReconnectPolicy.isLiveStream(track))
+            return false;
+
+        if (!streamReconnect.isUnexpectedEnd(endReason, restartRequested))
+        {
+            // Deliberate stop/skip/replace: start fresh next time the stream drops.
+            streamReconnect.reset();
+            return false;
+        }
+
+        String uri = track.getInfo().uri;
+        long delaySeconds = streamReconnect.nextDelaySeconds();
+        if (delaySeconds < 0)
+        {
+            LOGGER.warn("Stream {} dropped ({}) and the reconnect limit of {} attempts was reached; giving up",
+                    uri, endReason, streamReconnect.getMaxAttempts());
+            streamReconnect.reset();
+            return false;
+        }
+
+        int attempt = streamReconnect.getAttempts();
+        String attemptLabel = streamReconnect.getMaxAttempts() > 0
+                ? attempt + "/" + streamReconnect.getMaxAttempts()
+                : Integer.toString(attempt);
+        LOGGER.warn("Stream {} ended unexpectedly ({}); reconnecting in {}s (attempt {})",
+                uri, endReason, delaySeconds, attemptLabel);
+
+        QueuedTrack replacement = new QueuedTrack(track.makeClone(), track.getUserData(RequestMetadata.class));
+        lastReason = "Reconnecting to stream (attempt " + attemptLabel + ").";
+
+        Runnable reconnect;
+        synchronized (reconnectLock)
+        {
+            final int generation = ++reconnectGeneration;
+            reconnect = () ->
+            {
+                synchronized (reconnectLock)
+                {
+                    if (generation != reconnectGeneration)
+                        return; // cancelled or superseded
+                    pendingReconnect = null;
+                }
+                if (player.getPlayingTrack() != null)
+                {
+                    // Someone queued something else in the meantime; don't interrupt it.
+                    LOGGER.info("Skipping stream reconnect for {}: another track is already playing", uri);
+                    streamReconnect.reset();
+                    return;
+                }
+                LOGGER.info("Reconnecting to stream {}", uri);
+                player.playTrack(replacement.getTrack());
+            };
+            if (delaySeconds > 0)
+                pendingReconnect = manager.getBot().getThreadpool().schedule(reconnect, delaySeconds, TimeUnit.SECONDS);
+        }
+        if (delaySeconds <= 0)
+            reconnect.run();
+        return true;
     }
 
     public boolean isMusicPlaying(JDA jda)
@@ -235,6 +351,10 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
         else if (track != null && track.getInfo() != null) {
             LOGGER.debug("Track ended: {} Reason: {}", track.getInfo().title, endReason);
         }
+
+        // A persisted live stream that dropped is reconnected instead of advancing the queue.
+        if (scheduleStreamReconnect(player, track, endReason))
+            return;
 
         RepeatMode repeatMode = manager.getBot().getSettingsManager().getSettings(guildId).getRepeatMode();
         // if the track ended normally, and we're in repeat mode, re-add it to the queue
@@ -429,10 +549,19 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
                    .append(" (ID: ").append(rm.user.id).append(")\n");
         }
         
-        LOGGER.warn("Track {} is stuck after {}ms\n{}", 
-            track != null ? track.getIdentifier() : "null", 
-            thresholdMs, 
+        LOGGER.warn("Track {} is stuck after {}ms\n{}",
+            track != null ? track.getIdentifier() : "null",
+            thresholdMs,
             details.toString());
+
+        // A persisted live stream that stops delivering data is dead; restart it rather than
+        // sitting in silence. Stopping fires onTrackEnd(STOPPED), which sees the restart flag.
+        if (streamReconnect.isEnabled() && StreamReconnectPolicy.isLiveStream(track))
+        {
+            LOGGER.warn("Stream {} stalled for {}ms; restarting it", track.getInfo().uri, thresholdMs);
+            streamRestartRequested = true;
+            player.stopTrack();
+        }
     }
 
     //
@@ -492,7 +621,16 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
         
         boolean frameAvailable = lastFrame != null;
         metricsListener.onFrameProvided(frameAvailable, latencyNanos);
-        
+
+        // Once a reconnected stream has played stably for a while, forget past failures so the
+        // next drop starts from the shortest delay again.
+        if (frameAvailable && streamReconnect.getAttempts() > 0)
+        {
+            AudioTrack current = audioPlayer.getPlayingTrack();
+            if (current != null && current.getPosition() >= STREAM_STABLE_PLAYBACK_MS)
+                streamReconnect.reset();
+        }
+
         return frameAvailable;
     }
     
