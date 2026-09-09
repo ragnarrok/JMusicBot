@@ -242,7 +242,7 @@ Higher values provide more protection against stuttering but add latency. The de
 
 Internet radio streams (Azuracast, Icecast, Shoutcast, etc.) occasionally drop: the server restarts, the connection is reset, or the stream stalls and stops sending data. By default the bot treats that like the end of a track and moves on, so the stream has to be queued again by hand.
 
-Turn on stream persistence in `config.txt` and the bot will reconnect to the same stream automatically instead:
+Turn on stream persistence in `config.txt` (or in the desktop GUI under the Config tab, "Live Streams") and the bot will reconnect to the same stream automatically instead:
 
 ```hocon
 playback {
