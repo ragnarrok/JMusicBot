@@ -17,6 +17,7 @@ package com.jagrosh.jmusicbot.listener;
 
 import com.jagrosh.jmusicbot.Bot;
 import com.jagrosh.jmusicbot.JMusicBot;
+import com.jagrosh.jmusicbot.audio.StreamResumer;
 import com.jagrosh.jmusicbot.commands.SlashCommandRegistry;
 import com.jagrosh.jmusicbot.entities.UserInteraction.Level;
 import com.jagrosh.jmusicbot.utils.OtherUtil;
@@ -75,6 +76,11 @@ public class StartupLifecycleListener extends ListenerAdapter {
             } catch (Exception ignore) {
             }
         });
+        try {
+            new StreamResumer(bot).resumeAll(event.getJDA());
+        } catch (Exception e) {
+            LoggerFactory.getLogger("MusicBot").warn("Failed to resume live streams: {}", e.toString());
+        }
         if (bot.getConfig().useUpdateAlerts()) {
             bot.getThreadpool().scheduleWithFixedDelay(() -> {
                 try {

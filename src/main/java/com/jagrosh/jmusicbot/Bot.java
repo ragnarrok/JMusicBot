@@ -22,7 +22,10 @@ import com.jagrosh.jmusicbot.audio.AudioHandler;
 import com.jagrosh.jmusicbot.audio.AudioLoadWrapper;
 import com.jagrosh.jmusicbot.audio.NowPlayingHandler;
 import com.jagrosh.jmusicbot.audio.PlayerManager;
+import com.jagrosh.jmusicbot.audio.StreamMetadataService;
+import com.jagrosh.jmusicbot.audio.StreamResumeStore;
 import com.jagrosh.jmusicbot.audio.TrackLoadingMonitor;
+import com.jagrosh.jmusicbot.audio.VoiceRejoinHandler;
 import com.jagrosh.jmusicbot.entities.UserInteraction;
 import javax.swing.JFrame;
 import com.jagrosh.jmusicbot.playlist.PlaylistLoader;
@@ -54,6 +57,9 @@ public class Bot
     private final PlaylistLoader playlists;
     private final NowPlayingHandler nowplaying;
     private final AloneInVoiceHandler aloneInVoiceHandler;
+    private final StreamResumeStore streamResumeStore;
+    private final StreamMetadataService streamMetadataService;
+    private final VoiceRejoinHandler voiceRejoinHandler;
     private final MusicService musicService;
     private final SearchService searchService;
     private final YoutubeOauth2TokenHandler youTubeOauth2TokenHandler;
@@ -84,6 +90,10 @@ public class Bot
         this.nowplaying.init();
         this.aloneInVoiceHandler = new AloneInVoiceHandler(this);
         this.aloneInVoiceHandler.init();
+        this.streamResumeStore = new StreamResumeStore(config.resumeStreamsOnRestart());
+        this.streamMetadataService = StreamMetadataService.fromConfig(config);
+        this.voiceRejoinHandler = new VoiceRejoinHandler(this);
+        this.voiceRejoinHandler.init();
         this.musicService = new MusicService(this);
         this.searchService = new SearchService(this);
         
@@ -131,6 +141,30 @@ public class Bot
     public AloneInVoiceHandler getAloneInVoiceHandler()
     {
         return aloneInVoiceHandler;
+    }
+
+    /**
+     * Remembers the live stream each guild is playing so it can be resumed after a restart.
+     */
+    public StreamResumeStore getStreamResumeStore()
+    {
+        return streamResumeStore;
+    }
+
+    /**
+     * Polls radio stations for the song they are currently playing.
+     */
+    public StreamMetadataService getStreamMetadataService()
+    {
+        return streamMetadataService;
+    }
+
+    /**
+     * Rejoins voice when the bot is disconnected while playing.
+     */
+    public VoiceRejoinHandler getVoiceRejoinHandler()
+    {
+        return voiceRejoinHandler;
     }
 
     public MusicService getMusicService()
@@ -214,6 +248,9 @@ public class Bot
             return;
         shuttingDown = true;
 
+        // Keep the remembered streams: the stopAndClear below must not erase what should resume on restart.
+        streamResumeStore.freeze();
+
         // Clean up audio connections first (before shutting down thread pool, as these may trigger events that use it)
         if (jda != null && jda.getStatus() != JDA.Status.SHUTTING_DOWN)
         {
@@ -232,6 +269,7 @@ public class Bot
 
         // Shut down thread pool after audio cleanup to avoid RejectedExecutionException
         threadpool.shutdownNow();
+        streamMetadataService.shutdown();
 
         if (gui != null)
             gui.dispose();

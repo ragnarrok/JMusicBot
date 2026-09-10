@@ -14,6 +14,7 @@ import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
+import com.jagrosh.jmusicbot.audio.StreamMetadata;
 
 public class MessageFormatter {
     private static final String NP_PREFIX = "np_";
@@ -39,7 +40,7 @@ public class MessageFormatter {
         eb.setColor(info.guild.getSelfMember().getColors().getPrimary());
         eb.setAuthor(info.guild.getName(), null, info.guild.getIconUrl());
 
-        String title = FormatUtil.filter(FormatUtil.getTrackTitle(info.track));
+        String title = nowPlayingTitle(info);
         try {
             eb.setTitle(title, info.track.getInfo().uri);
         } catch (Exception ignored) {
@@ -47,17 +48,23 @@ public class MessageFormatter {
         }
 
         RepeatMode repeatMode = bot.getSettingsManager().getSettings(info.guild).getRepeatMode();
-        eb.setDescription(buildPlaybackStatusDescription(bot, info, repeatMode, false));
+        eb.setDescription(withSongLine(info, buildPlaybackStatusDescription(bot, info, repeatMode, false)));
 
-        String rawAuthor = info.track.getInfo().author;
-        String author = rawAuthor == null ? null : FormatUtil.filter(rawAuthor);
-        if (author != null && (!author.isEmpty() && !author.equalsIgnoreCase("unknown artist"))) {
-            eb.addField("Author", author, false);
+        // The station's song line already names the artist; only show the track author otherwise.
+        if (songLine(info) == null) {
+            String rawAuthor = info.track.getInfo().author;
+            String author = rawAuthor == null ? null : FormatUtil.filter(rawAuthor);
+            if (author != null && (!author.isEmpty() && !author.equalsIgnoreCase("unknown artist"))) {
+                eb.addField("Author", author, false);
+            }
         }
 
         eb.addField("Duration", TimeUtil.formatTime(info.duration), true);
         eb.addField("Queue", String.valueOf(info.queueSize), true);
         eb.addField("Volume", info.volume + "%", true);
+        if (info.streamMetadata != null && info.streamMetadata.listeners() >= 0) {
+            eb.addField("Listeners", String.valueOf(info.streamMetadata.listeners()), true);
+        }
 
         if (repeatMode != RepeatMode.OFF) {
             eb.addField("Repeat", repeatMode.getEmoji() + " " + repeatMode.getUserFriendlyName(), true);
@@ -89,14 +96,18 @@ public class MessageFormatter {
 
         EmbedBuilder eb = new EmbedBuilder();
         eb.setColor(info.guild.getSelfMember().getColors().getPrimary());
-        String title = FormatUtil.filter(FormatUtil.getTrackTitle(info.track));
+        String title = nowPlayingTitle(info);
         try {
             eb.setTitle(title, info.track.getInfo().uri);
         } catch (Exception ignored) {
             eb.setTitle(title);
         }
         RepeatMode repeatMode = bot.getSettingsManager().getSettings(info.guild).getRepeatMode();
-        eb.setDescription(buildPlaybackStatusDescription(bot, info, repeatMode, true));
+        eb.setDescription(withSongLine(info, buildPlaybackStatusDescription(bot, info, repeatMode, true)));
+        String artworkUrl = resolveArtworkUrl(bot, info);
+        if (artworkUrl != null && info.streamMetadata != null) {
+            eb.setThumbnail(artworkUrl);
+        }
 
         if (showButtons) {
             applyNowPlayingButtons(mb, info, repeatMode);
@@ -197,10 +208,39 @@ public class MessageFormatter {
                 : "Unknown";
     }
 
+    /** Station name for a live stream with metadata, otherwise the track title. */
+    private static String nowPlayingTitle(NowPlayingInfo info)
+    {
+        StreamMetadata metadata = info.streamMetadata;
+        if (metadata != null && metadata.stationName() != null)
+            return FormatUtil.filter(metadata.stationName());
+        return FormatUtil.filter(FormatUtil.getTrackTitle(info.track));
+    }
+
+    private static String songLine(NowPlayingInfo info)
+    {
+        return info.streamMetadata == null ? null : info.streamMetadata.songLine();
+    }
+
+    /** Prefixes the description with the song the station reports, when there is one. */
+    private static String withSongLine(NowPlayingInfo info, String description)
+    {
+        String song = songLine(info);
+        if (song == null)
+            return description;
+        return "🎵 **" + FormatUtil.filter(song) + "**\n" + description;
+    }
+
     private static String resolveArtworkUrl(Bot bot, NowPlayingInfo info)
     {
         if (info.track instanceof LocalAudioTrack || !bot.getConfig().useNPImages())
             return null;
+        if (info.streamMetadata != null)
+        {
+            // Station art or nothing: the YouTube thumbnail fallback makes no sense for a radio stream.
+            String art = info.streamMetadata.artworkUrl();
+            return art == null || art.isEmpty() ? null : art;
+        }
         var artworkUrl = info.track.getInfo().artworkUrl;
         if (artworkUrl == null || artworkUrl.isEmpty())
             artworkUrl = "https://img.youtube.com/vi/" + info.track.getIdentifier() + "/mqdefault.jpg";

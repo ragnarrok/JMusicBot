@@ -21,7 +21,7 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Handles voice state updates (alone-in-voice logic).
+ * Handles voice state updates (alone-in-voice logic and rejoin-on-disconnect).
  */
 public class VoiceStateListener extends ListenerAdapter {
 
@@ -34,5 +34,8 @@ public class VoiceStateListener extends ListenerAdapter {
     @Override
     public void onGuildVoiceUpdate(@NotNull GuildVoiceUpdateEvent event) {
         bot.getAloneInVoiceHandler().onVoiceUpdate(event);
+        if (bot.getVoiceRejoinHandler() != null) {
+            bot.getVoiceRejoinHandler().onVoiceUpdate(event);
+        }
     }
 }

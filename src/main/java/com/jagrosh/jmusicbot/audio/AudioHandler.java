@@ -31,6 +31,9 @@ import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.audio.AudioSendHandler;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
+import net.dv8tion.jda.api.managers.AudioManager;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -153,6 +156,7 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
     {
         LOGGER.debug("Stopping and clearing queue");
         cancelStreamReconnect();
+        clearResumeState();
         queue.clearAll();
         defaultQueue.clear();
         audioPlayer.stopTrack();
@@ -167,9 +171,76 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
     {
         LOGGER.debug("Stopping playback and clearing queue (preserving history)");
         cancelStreamReconnect();
+        clearResumeState();
         queue.clear();
         defaultQueue.clear();
         audioPlayer.stopTrack();
+    }
+
+    /**
+     * Remembers a live stream (and the voice channel it plays in) for resume-on-restart, or
+     * forgets it when a regular track takes over.
+     */
+    private void updateResumeState(AudioTrack track)
+    {
+        StreamResumeStore store = manager.getBot().getStreamResumeStore();
+        if (store == null || !store.isEnabled())
+            return;
+        if (!StreamReconnectPolicy.isLiveStream(track))
+        {
+            store.clear(guildId);
+            return;
+        }
+
+        long channelId = 0L;
+        JDA jda = manager.getBot().getJDA();
+        Guild guild = jda == null ? null : jda.getGuildById(guildId);
+        if (guild != null)
+        {
+            AudioManager audioManager = guild.getAudioManager();
+            AudioChannel channel = audioManager.getConnectedChannel();
+            if (channel == null)
+            {
+                // Connection may still be opening; the voice state knows the target channel.
+                Member self = guild.getSelfMember();
+                if (self != null && self.getVoiceState() != null)
+                    channel = self.getVoiceState().getChannel();
+            }
+            if (channel != null)
+                channelId = channel.getIdLong();
+        }
+        store.record(guildId, channelId, track.getInfo().uri, track.getInfo().title);
+    }
+
+    private void clearResumeState()
+    {
+        StreamResumeStore store = manager.getBot().getStreamResumeStore();
+        if (store != null)
+            store.clear(guildId);
+    }
+
+    /** Starts asking the station what it is playing; the now-playing message follows along. */
+    private void startStreamMetadata(AudioTrack track)
+    {
+        StreamMetadataService service = manager.getBot().getStreamMetadataService();
+        if (service == null || !StreamReconnectPolicy.isLiveStream(track))
+            return;
+        service.start(guildId, track, (gid, t, metadata) ->
+                manager.getBot().getNowplayingHandler().onStreamMetadataUpdate(gid, t, metadata));
+    }
+
+    private void stopStreamMetadata()
+    {
+        StreamMetadataService service = manager.getBot().getStreamMetadataService();
+        if (service != null)
+            service.stop(guildId);
+    }
+
+    /** What the station behind the current live stream reports it is playing, or null. */
+    public StreamMetadata getStreamMetadata()
+    {
+        StreamMetadataService service = manager.getBot().getStreamMetadataService();
+        return service == null ? null : service.get(guildId);
     }
 
     /**
@@ -340,7 +411,8 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
             trackUri = track.getInfo().uri;
         }
         metricsListener.onTrackEnd(trackTitle, trackUri);
-        
+        stopStreamMetadata();
+
         // Log track end with details for debugging
         if (endReason != AudioTrackEndReason.FINISHED) {
             LOGGER.debug("Track {} ended with reason: {} (Track: {})", 
@@ -379,6 +451,7 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
             {
                 lastReason = null;
                 manager.getBot().getNowplayingHandler().onTrackUpdate(guildId, null);
+                clearResumeState();
                 if(!manager.getBot().getConfig().getStay())
                     manager.getBot().closeAudioConnection(guildId);
                 // unpause, in the case when the player was paused and the track has been skipped.
@@ -502,6 +575,8 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
         {
             QueuedTrack startedTrack = new QueuedTrack(track.makeClone(), track.getUserData(RequestMetadata.class));
             queue.addToHistory(startedTrack);
+            updateResumeState(track);
+            startStreamMetadata(track);
         }
 
         if (lastReason == null)
@@ -575,7 +650,8 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
             queue.size(),
             queue.getHistory().size(),
             isCurrentTrackFavorited(),
-            lastReason
+            lastReason,
+            getStreamMetadata()
         );
     }
 
