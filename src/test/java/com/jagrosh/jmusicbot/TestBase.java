@@ -3,6 +3,8 @@ package com.jagrosh.jmusicbot;
 import com.jagrosh.jmusicbot.audio.AudioHandler;
 import com.jagrosh.jmusicbot.audio.AudioLoadWrapper;
 import com.jagrosh.jmusicbot.audio.PlayerManager;
+import com.jagrosh.jmusicbot.audio.StreamMetadataService;
+import com.jagrosh.jmusicbot.audio.StreamResumeStore;
 import com.jagrosh.jmusicbot.settings.Settings;
 import com.jagrosh.jmusicbot.settings.SettingsManager;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
@@ -56,6 +58,10 @@ public abstract class TestBase {
     protected AudioChannelUnion audioChannel;
     @Mock
     protected ScheduledExecutorService threadpool;
+    @Mock
+    protected StreamResumeStore streamResumeStore;
+    @Mock
+    protected StreamMetadataService streamMetadataService;
 
     protected final long GUILD_ID = 123456789L;
     protected final long OWNER_ID = 123L;
@@ -71,6 +77,10 @@ public abstract class TestBase {
         when(bot.getThreadpool()).thenReturn(threadpool);
         when(bot.getJDA()).thenReturn(jda);
         when(bot.getAudioLoadWrapper()).thenReturn(AudioLoadWrapper.NO_OP);
+        when(bot.getStreamResumeStore()).thenReturn(streamResumeStore);
+        when(streamResumeStore.isEnabled()).thenReturn(true);
+        when(bot.getStreamMetadataService()).thenReturn(streamMetadataService);
+        when(streamMetadataService.isEnabled()).thenReturn(true);
 
         // PlayerManager relationships
         when(playerManager.getBot()).thenReturn(bot);

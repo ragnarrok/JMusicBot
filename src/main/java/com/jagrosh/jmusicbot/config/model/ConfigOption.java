@@ -63,12 +63,18 @@ public enum ConfigOption {
     STREAM_RECONNECT_DELAY_SECONDS("playback.streams.reconnectDelaySeconds", ConfigType.LONG, false, "Seconds before the first stream reconnect attempt (doubles per attempt)"),
     STREAM_RECONNECT_MAX_DELAY_SECONDS("playback.streams.reconnectMaxDelaySeconds", ConfigType.LONG, false, "Upper bound in seconds for the stream reconnect delay"),
     STREAM_RECONNECT_MAX_ATTEMPTS("playback.streams.reconnectMaxAttempts", ConfigType.INT, false, "Max consecutive stream reconnect attempts (0 = unlimited)"),
+    STREAM_RESUME_ON_RESTART("playback.streams.resumeOnRestart", ConfigType.BOOLEAN, false, "Whether a live stream playing at shutdown is resumed on startup"),
+    STREAM_METADATA_ENABLED("playback.streams.metadata.enabled", ConfigType.BOOLEAN, false, "Whether to show the station's current song for live streams"),
+    STREAM_METADATA_POLL_SECONDS("playback.streams.metadata.pollIntervalSeconds", ConfigType.LONG, false, "Seconds between station metadata polls (min 5)"),
 
     // Numeric options
     MAX_SECONDS("playback.maxTrackSeconds", ConfigType.LONG, false, "Maximum track length in seconds (0 = no limit)"),
     MAX_YT_PLAYLIST_PAGES("playback.maxYouTubePlaylistPages", ConfigType.INT, false, "Maximum YouTube playlist pages to load"),
     MAX_HISTORY_SIZE("playback.maxHistorySize", ConfigType.INT, false, "Maximum number of tracks to keep in history (0 = disabled)"),
     ALONE_TIME_UNTIL_STOP("voice.aloneTimeUntilStopSeconds", ConfigType.LONG, false, "Seconds to wait alone before leaving (0 = never)"),
+    VOICE_REJOIN_ON_DISCONNECT("voice.rejoinOnDisconnect", ConfigType.BOOLEAN, false, "Whether to rejoin voice when disconnected while playing"),
+    VOICE_REJOIN_DELAY_SECONDS("voice.rejoinDelaySeconds", ConfigType.LONG, false, "Seconds to wait before rejoining voice"),
+    VOICE_REJOIN_MAX_ATTEMPTS("voice.rejoinMaxAttempts", ConfigType.INT, false, "Max voice rejoin attempts per 5 minutes (0 = unlimited)"),
     SKIP_RATIO("playback.skipRatio", ConfigType.DOUBLE, false, "Ratio of users needed to vote skip"),
     CLEAR_CHANNEL_DELETE_LIMIT("commands.clearChannel.deleteLimit", ConfigType.INT, false, "Max messages deleted by clearchannel (0 = unlimited)"),
     CLEAR_CHANNEL_AGE_DAYS("commands.clearChannel.ageDays", ConfigType.LONG, false, "Max message age in days for clearchannel (0 = unlimited)"),

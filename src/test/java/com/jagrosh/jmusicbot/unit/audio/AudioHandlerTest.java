@@ -19,6 +19,8 @@ import com.jagrosh.jmusicbot.TestBase;
 import com.jagrosh.jmusicbot.audio.AudioHandler;
 import com.jagrosh.jmusicbot.audio.NowPlayingHandler;
 import com.jagrosh.jmusicbot.audio.QueuedTrack;
+import com.jagrosh.jmusicbot.audio.StreamMetadata;
+import com.jagrosh.jmusicbot.audio.StreamMetadataService;
 import com.jagrosh.jmusicbot.settings.QueueType;
 import com.jagrosh.jmusicbot.settings.RepeatMode;
 import com.sedmelluq.discord.lavaplayer.tools.Units;
@@ -749,6 +751,121 @@ public class AudioHandlerTest extends TestBase {
 
             verifyNoReconnectScheduled();
             verify(audioPlayer).playTrack(stream.makeClone());
+        }
+
+        @Test
+        @DisplayName("starting a live stream records it for resume-on-restart with the connected channel")
+        void trackStart_recordsStreamForResume()
+        {
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+            when(jda.getGuildById(GUILD_ID)).thenReturn(guild);
+            when(audioManager.getConnectedChannel()).thenReturn(audioChannel);
+            when(audioChannel.getIdLong()).thenReturn(42L);
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackStart(audioPlayer, stream);
+
+            verify(streamResumeStore).record(GUILD_ID, 42L, STREAM_URI, "Station");
+        }
+
+        @Test
+        @DisplayName("starting a live stream before voice is connected records channel 0")
+        void trackStart_recordsStreamWithoutChannel()
+        {
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackStart(audioPlayer, stream);
+
+            verify(streamResumeStore).record(GUILD_ID, 0L, STREAM_URI, "Station");
+        }
+
+        @Test
+        @DisplayName("starting a regular track forgets the resume entry")
+        void trackStart_regularTrackClearsResume()
+        {
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+
+            audioHandler.onTrackStart(audioPlayer, createRegularTrack());
+
+            verify(streamResumeStore).clear(GUILD_ID);
+            verify(streamResumeStore, never()).record(anyLong(), anyLong(), any(), any());
+        }
+
+        @Test
+        @DisplayName("stopping playback forgets the resume entry")
+        void stop_clearsResume()
+        {
+            audioHandler.stopAndClear();
+            verify(streamResumeStore).clear(GUILD_ID);
+
+            audioHandler.stopAndClearQueuePreserveHistory();
+            verify(streamResumeStore, times(2)).clear(GUILD_ID);
+        }
+
+        @Test
+        @DisplayName("queue running out forgets the resume entry")
+        void queueEnd_clearsResume()
+        {
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+
+            audioHandler.onTrackEnd(audioPlayer, createRegularTrack(), AudioTrackEndReason.FINISHED);
+
+            verify(streamResumeStore).clear(GUILD_ID);
+        }
+
+        @Test
+        @DisplayName("starting a live stream starts station metadata polling; ending it stops polling")
+        void streamMetadata_startAndStop()
+        {
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+            AudioTrack stream = createStreamTrack();
+
+            audioHandler.onTrackStart(audioPlayer, stream);
+            verify(streamMetadataService).start(eq(GUILD_ID), eq(stream), any());
+
+            audioHandler.onTrackEnd(audioPlayer, stream, AudioTrackEndReason.FINISHED);
+            verify(streamMetadataService).stop(GUILD_ID);
+        }
+
+        @Test
+        @DisplayName("regular tracks never start station metadata polling")
+        void streamMetadata_notForRegularTracks()
+        {
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+
+            audioHandler.onTrackStart(audioPlayer, createRegularTrack());
+
+            verify(streamMetadataService, never()).start(anyLong(), any(), any());
+        }
+
+        @Test
+        @DisplayName("metadata change refreshes the now-playing message through the handler")
+        void streamMetadata_listenerRefreshesNowPlaying()
+        {
+            NowPlayingHandler np = mock(NowPlayingHandler.class);
+            when(bot.getNowplayingHandler()).thenReturn(np);
+            AudioTrack stream = createStreamTrack();
+            audioHandler.onTrackStart(audioPlayer, stream);
+            ArgumentCaptor<StreamMetadataService.Listener> captor = ArgumentCaptor.forClass(StreamMetadataService.Listener.class);
+            verify(streamMetadataService).start(eq(GUILD_ID), eq(stream), captor.capture());
+            StreamMetadata md = new StreamMetadata("S", "T", "A", null, 1, java.time.Instant.now());
+
+            captor.getValue().onMetadataChanged(GUILD_ID, stream, md);
+
+            verify(np).onStreamMetadataUpdate(GUILD_ID, stream, md);
+        }
+
+        @Test
+        @DisplayName("disabled resume store is never written")
+        void disabledStore_notWritten()
+        {
+            when(streamResumeStore.isEnabled()).thenReturn(false);
+            when(bot.getNowplayingHandler()).thenReturn(mock(NowPlayingHandler.class));
+
+            audioHandler.onTrackStart(audioPlayer, createStreamTrack());
+
+            verify(streamResumeStore, never()).record(anyLong(), anyLong(), any(), any());
         }
 
         @Test

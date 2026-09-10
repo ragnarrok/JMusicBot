@@ -398,6 +398,97 @@ class MessageFormatterTest
         return message.getEmbeds().get(0);
     }
 
+    // ==================== Live stream station metadata ====================
+
+    private static MessageCreateData buildStreamNowPlaying(boolean minimalMessage, boolean useNpImages,
+                                                           com.jagrosh.jmusicbot.audio.StreamMetadata metadata)
+    {
+        Bot bot = mock(Bot.class);
+        BotConfig config = mock(BotConfig.class);
+        SettingsManager settingsManager = mock(SettingsManager.class);
+        Settings settings = mock(Settings.class);
+
+        when(bot.getConfig()).thenReturn(config);
+        when(bot.getSettingsManager()).thenReturn(settingsManager);
+        when(config.getSuccess()).thenReturn("ok");
+        when(config.showNpProgressBar()).thenReturn(false);
+        when(config.useNPImages()).thenReturn(useNpImages);
+
+        Guild guild = mock(Guild.class, RETURNS_DEEP_STUBS);
+        when(guild.getName()).thenReturn("Test Guild");
+        when(guild.getIconUrl()).thenReturn(null);
+        when(guild.getSelfMember().getVoiceState().getChannel().getName()).thenReturn("Music VC");
+        when(settingsManager.getSettings(guild)).thenReturn(settings);
+        when(settings.useMinimalNowPlayingMessage(config)).thenReturn(minimalMessage);
+        when(settings.showNowPlayingButtons(config)).thenReturn(false);
+        when(settings.getRepeatMode()).thenReturn(RepeatMode.OFF);
+
+        AudioTrack track = mock(AudioTrack.class, RETURNS_DEEP_STUBS);
+        String uri = "https://radio.example.com/listen/station/radio.mp3";
+        AudioTrackInfo trackInfo = new AudioTrackInfo("radio.mp3", "Unknown artist", Long.MAX_VALUE, uri, true, uri);
+        when(track.getInfo()).thenReturn(trackInfo);
+        when(track.getIdentifier()).thenReturn(uri);
+        when(track.getPosition()).thenReturn(0L);
+        when(track.getDuration()).thenReturn(Long.MAX_VALUE);
+        when(track.getSourceManager().getSourceName()).thenReturn("http");
+        when(track.getUserData(RequestMetadata.class)).thenReturn(null);
+
+        NowPlayingInfo info = new NowPlayingInfo(track, guild, false, 100, 0, 0, false, "", metadata);
+        return MessageFormatter.buildNowPlayingMessage(bot, info);
+    }
+
+    @Test
+    void streamMetadataRendersStationSongArtAndListeners()
+    {
+        var metadata = new com.jagrosh.jmusicbot.audio.StreamMetadata(
+                "Ragnarrok FM", "Teardrop", "Massive Attack", "https://radio.example.com/art.jpg", 27, java.time.Instant.now());
+
+        MessageEmbed embed = getSingleEmbed(buildStreamNowPlaying(false, true, metadata));
+
+        assertEquals("Ragnarrok FM", embed.getTitle());
+        assertTrue(embed.getDescription().startsWith("🎵 **Massive Attack - Teardrop**\n"));
+        assertNotNull(embed.getThumbnail());
+        assertEquals("https://radio.example.com/art.jpg", embed.getThumbnail().getUrl());
+        assertTrue(embed.getFields().stream().anyMatch(f -> "Listeners".equals(f.getName()) && "27".equals(f.getValue())));
+        assertTrue(embed.getFields().stream().noneMatch(f -> "Author".equals(f.getName())), "artist is in the song line");
+        assertTrue(embed.getFields().stream().anyMatch(f -> "Duration".equals(f.getName()) && "LIVE".equals(f.getValue())));
+    }
+
+    @Test
+    void streamMetadataWithoutSongFallsBackToTrackTitle()
+    {
+        var metadata = new com.jagrosh.jmusicbot.audio.StreamMetadata(null, null, null, null, -1, java.time.Instant.now());
+
+        MessageEmbed embed = getSingleEmbed(buildStreamNowPlaying(false, true, metadata));
+
+        assertEquals("radio.mp3", embed.getTitle());
+        assertFalse(embed.getDescription().contains("🎵"));
+        assertNull(embed.getThumbnail(), "no YouTube thumbnail guess for a radio stream");
+        assertTrue(embed.getFields().stream().noneMatch(f -> "Listeners".equals(f.getName())));
+    }
+
+    @Test
+    void streamMetadataInMinimalLayout()
+    {
+        var metadata = new com.jagrosh.jmusicbot.audio.StreamMetadata(
+                "Ragnarrok FM", "Teardrop", "Massive Attack", "https://radio.example.com/art.jpg", 27, java.time.Instant.now());
+
+        MessageEmbed embed = getSingleEmbed(buildStreamNowPlaying(true, false, metadata));
+
+        assertEquals("Ragnarrok FM", embed.getTitle());
+        assertTrue(embed.getDescription().startsWith("🎵 **Massive Attack - Teardrop**\n"));
+        assertNull(embed.getThumbnail(), "images disabled");
+    }
+
+    @Test
+    void noStreamMetadataLeavesRegularLayoutUnchanged()
+    {
+        MessageEmbed embed = getSingleEmbed(buildStreamNowPlaying(false, false, null));
+
+        assertEquals("radio.mp3", embed.getTitle());
+        assertFalse(embed.getDescription().contains("🎵"));
+    }
+
     private static MessageEmbed.Field getField(MessageEmbed embed, String fieldName)
     {
         return embed.getFields().stream()

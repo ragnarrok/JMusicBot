@@ -59,6 +59,9 @@ public class ConfigPanel extends JPanel {
     // Voice section
     private final JCheckBox stayInChannelCheckBox;
     private final JSpinner aloneTimeSpinner;
+    private final JCheckBox rejoinOnDisconnectCheckBox;
+    private final JSpinner rejoinDelaySpinner;
+    private final JSpinner rejoinMaxAttemptsSpinner;
     
     // Playback section
     private final JSpinner maxSecondsSpinner;
@@ -71,6 +74,9 @@ public class ConfigPanel extends JPanel {
     private final JSpinner reconnectDelaySpinner;
     private final JSpinner reconnectMaxDelaySpinner;
     private final JSpinner reconnectMaxAttemptsSpinner;
+    private final JCheckBox resumeOnRestartCheckBox;
+    private final JCheckBox streamMetadataCheckBox;
+    private final JSpinner metadataPollSpinner;
 
     // UI/Emojis section
     private final JTextField successEmojiField;
@@ -110,7 +116,11 @@ public class ConfigPanel extends JPanel {
         // Voice
         stayInChannelCheckBox = new JCheckBox("Stay in voice channel after queue ends");
         aloneTimeSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 3600, 1));
-        
+        rejoinOnDisconnectCheckBox = new JCheckBox("Rejoin voice channel if disconnected while playing");
+        rejoinDelaySpinner = new JSpinner(new SpinnerNumberModel(5, 1, 600, 1));
+        rejoinMaxAttemptsSpinner = new JSpinner(new SpinnerNumberModel(5, 0, 1000, 1));
+        rejoinOnDisconnectCheckBox.addActionListener(e -> updateRejoinControlsEnabled());
+
         // Playback
         maxSecondsSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 86400, 60));
         maxYTPlaylistPagesSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 100, 1));
@@ -123,6 +133,10 @@ public class ConfigPanel extends JPanel {
         reconnectMaxDelaySpinner = new JSpinner(new SpinnerNumberModel(60, 0, 3600, 5));
         reconnectMaxAttemptsSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 10000, 1));
         persistStreamsCheckBox.addActionListener(e -> updateStreamControlsEnabled());
+        resumeOnRestartCheckBox = new JCheckBox("Resume the stream after a bot restart");
+        streamMetadataCheckBox = new JCheckBox("Show the station's current song (Azuracast / Icecast)");
+        metadataPollSpinner = new JSpinner(new SpinnerNumberModel(15, 5, 600, 5));
+        streamMetadataCheckBox.addActionListener(e -> metadataPollSpinner.setEnabled(streamMetadataCheckBox.isSelected()));
 
         // UI/Emojis
         successEmojiField = new JTextField(5);
@@ -245,17 +259,17 @@ public class ConfigPanel extends JPanel {
     private JPanel createVoiceSection() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(new TitledBorder("Voice"));
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
-        
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 150));
+
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4, 8, 4, 8);
         gbc.anchor = GridBagConstraints.WEST;
-        
+
         // Row 0: Stay in Channel
         gbc.gridx = 0; gbc.gridy = 0;
-        gbc.gridwidth = 2;
+        gbc.gridwidth = 4;
         panel.add(stayInChannelCheckBox, gbc);
-        
+
         // Row 1: Alone Time
         gbc.gridx = 0; gbc.gridy = 1;
         gbc.gridwidth = 1;
@@ -263,8 +277,35 @@ public class ConfigPanel extends JPanel {
         gbc.gridx = 1;
         gbc.weightx = 1.0;
         panel.add(aloneTimeSpinner, gbc);
-        
+
+        // Row 2: Rejoin on disconnect
+        gbc.gridx = 0; gbc.gridy = 2;
+        gbc.gridwidth = 4;
+        gbc.weightx = 0;
+        panel.add(rejoinOnDisconnectCheckBox, gbc);
+
+        // Row 3: Rejoin delay and attempt limit
+        gbc.gridx = 0; gbc.gridy = 3;
+        gbc.gridwidth = 1;
+        panel.add(new JLabel("Rejoin Delay (seconds):"), gbc);
+        gbc.gridx = 1;
+        panel.add(rejoinDelaySpinner, gbc);
+        gbc.gridx = 2;
+        panel.add(new JLabel("Max Rejoins per 5 min (0=unlimited):"), gbc);
+        gbc.gridx = 3;
+        gbc.weightx = 1.0;
+        panel.add(rejoinMaxAttemptsSpinner, gbc);
+
         return panel;
+    }
+
+    /**
+     * Greys out the rejoin tuning fields while rejoin-on-disconnect is off.
+     */
+    private void updateRejoinControlsEnabled() {
+        boolean enabled = rejoinOnDisconnectCheckBox.isSelected();
+        rejoinDelaySpinner.setEnabled(enabled);
+        rejoinMaxAttemptsSpinner.setEnabled(enabled);
     }
     
     /**
@@ -312,7 +353,7 @@ public class ConfigPanel extends JPanel {
     private JPanel createStreamsSection() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(new TitledBorder("Live Streams"));
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 210));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4, 8, 4, 8);
@@ -349,6 +390,23 @@ public class ConfigPanel extends JPanel {
         hint.setFont(hint.getFont().deriveFont(10f));
         hint.setForeground(Color.GRAY);
         panel.add(hint, gbc);
+
+        // Row 3: Resume after restart
+        gbc.gridx = 0; gbc.gridy = 3;
+        gbc.gridwidth = 4;
+        panel.add(resumeOnRestartCheckBox, gbc);
+
+        // Row 4: Station metadata
+        gbc.gridx = 0; gbc.gridy = 4;
+        gbc.gridwidth = 4;
+        panel.add(streamMetadataCheckBox, gbc);
+
+        // Row 5: Poll interval
+        gbc.gridx = 0; gbc.gridy = 5;
+        gbc.gridwidth = 1;
+        panel.add(new JLabel("Song Check Interval (seconds):"), gbc);
+        gbc.gridx = 1;
+        panel.add(metadataPollSpinner, gbc);
 
         return panel;
     }
@@ -494,7 +552,11 @@ public class ConfigPanel extends JPanel {
         // Voice
         stayInChannelCheckBox.setSelected(config.getStay());
         aloneTimeSpinner.setValue((int) config.getAloneTimeUntilStop());
-        
+        rejoinOnDisconnectCheckBox.setSelected(config.rejoinVoiceOnDisconnect());
+        rejoinDelaySpinner.setValue((int) Math.max(1, Math.min(600, config.getVoiceRejoinDelaySeconds())));
+        rejoinMaxAttemptsSpinner.setValue(Math.min(1000, config.getVoiceRejoinMaxAttempts()));
+        updateRejoinControlsEnabled();
+
         // Playback
         maxSecondsSpinner.setValue((int) config.getMaxSeconds());
         maxYTPlaylistPagesSpinner.setValue(config.getMaxYTPlaylistPages());
@@ -506,6 +568,10 @@ public class ConfigPanel extends JPanel {
         reconnectDelaySpinner.setValue((int) Math.min(3600, config.getStreamReconnectDelaySeconds()));
         reconnectMaxDelaySpinner.setValue((int) Math.min(3600, config.getStreamReconnectMaxDelaySeconds()));
         reconnectMaxAttemptsSpinner.setValue(Math.min(10000, config.getStreamReconnectMaxAttempts()));
+        resumeOnRestartCheckBox.setSelected(config.resumeStreamsOnRestart());
+        streamMetadataCheckBox.setSelected(config.showStreamMetadata());
+        metadataPollSpinner.setValue((int) Math.max(5, Math.min(600, config.getStreamMetadataPollSeconds())));
+        metadataPollSpinner.setEnabled(config.showStreamMetadata());
         updateStreamControlsEnabled();
 
         // UI/Emojis
@@ -584,6 +650,9 @@ public class ConfigPanel extends JPanel {
         // Voice
         updates.put("voice.stayInChannel", String.valueOf(stayInChannelCheckBox.isSelected()));
         updates.put("voice.aloneTimeUntilStopSeconds", String.valueOf(aloneTimeSpinner.getValue()));
+        updates.put("voice.rejoinOnDisconnect", String.valueOf(rejoinOnDisconnectCheckBox.isSelected()));
+        updates.put("voice.rejoinDelaySeconds", String.valueOf(rejoinDelaySpinner.getValue()));
+        updates.put("voice.rejoinMaxAttempts", String.valueOf(rejoinMaxAttemptsSpinner.getValue()));
         
         // Playback
         updates.put("playback.maxTrackSeconds", String.valueOf(maxSecondsSpinner.getValue()));
@@ -596,6 +665,9 @@ public class ConfigPanel extends JPanel {
         updates.put("playback.streams.reconnectDelaySeconds", String.valueOf(reconnectDelaySpinner.getValue()));
         updates.put("playback.streams.reconnectMaxDelaySeconds", String.valueOf(reconnectMaxDelaySpinner.getValue()));
         updates.put("playback.streams.reconnectMaxAttempts", String.valueOf(reconnectMaxAttemptsSpinner.getValue()));
+        updates.put("playback.streams.resumeOnRestart", String.valueOf(resumeOnRestartCheckBox.isSelected()));
+        updates.put("playback.streams.metadata.enabled", String.valueOf(streamMetadataCheckBox.isSelected()));
+        updates.put("playback.streams.metadata.pollIntervalSeconds", String.valueOf(metadataPollSpinner.getValue()));
 
         // UI/Emojis
         updates.put("ui.emojis.success", quoteString(successEmojiField.getText()));

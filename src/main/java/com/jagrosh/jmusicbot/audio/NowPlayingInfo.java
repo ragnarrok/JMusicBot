@@ -17,6 +17,8 @@ public class NowPlayingInfo {
     public final int previousTrackCount;
     public final boolean isCurrentTrackFavorited;
     public final String footerInfo;
+    /** What the radio station reports it is playing, or null for non-streams / unknown. */
+    public final StreamMetadata streamMetadata;
 
     public NowPlayingInfo(AudioTrack track, Guild guild, boolean isPaused, int volume, int queueSize, String footerInfo) {
         this(track, guild, isPaused, volume, queueSize, 0, false, footerInfo);
@@ -44,6 +46,21 @@ public class NowPlayingInfo {
             boolean isCurrentTrackFavorited,
             String footerInfo
     ) {
+        this(track, guild, isPaused, volume, queueSize, previousTrackCount, isCurrentTrackFavorited, footerInfo, null);
+    }
+
+    public NowPlayingInfo(
+            AudioTrack track,
+            Guild guild,
+            boolean isPaused,
+            int volume,
+            int queueSize,
+            int previousTrackCount,
+            boolean isCurrentTrackFavorited,
+            String footerInfo,
+            StreamMetadata streamMetadata
+    ) {
+        this.streamMetadata = streamMetadata;
         this.track = track;
         this.guild = guild;
         this.isPaused = isPaused;

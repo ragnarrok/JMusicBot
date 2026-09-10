@@ -256,6 +256,15 @@ playback {
 
     # Consecutive failed attempts before giving up (0 = retry forever)
     reconnectMaxAttempts = 0
+
+    # Queue the stream again and rejoin the voice channel after a bot restart
+    resumeOnRestart = false
+
+    # Show the station's current song in the now-playing message
+    metadata {
+      enabled = true
+      pollIntervalSeconds = 15
+    }
   }
 }
 ```
@@ -266,6 +275,25 @@ playback {
 - `stop`, `skip`, `forceskip`, `skipto` and playing something else never trigger a reconnect. Queuing another track while a reconnect is pending cancels the reconnect.
 - Each consecutive failure doubles the wait (5s, 10s, 20s, 40s, 60s, 60s, ...). The counter resets once the stream has played for 30 seconds, so a brief blip always retries quickly.
 - Combine with `voice.stayInChannel = true` if you want the bot to stay in the voice channel even when it gives up after `reconnectMaxAttempts`.
+- With `resumeOnRestart = true`, the stream and voice channel are remembered in `streamresume.json` while a live stream plays. After an update, crash, or host reboot the bot queues the same stream and rejoins that channel on startup. The entry is forgotten when the stream is stopped or something else is played. If the stream server is unreachable at startup, loading is retried five times, 15 seconds apart.
+
+**Station metadata.** Lavaplayer does not read the in-stream song titles, so on its own the now-playing message only shows the stream URL. With `metadata.enabled = true` (the default) the bot asks the station what it is playing every `pollIntervalSeconds` and updates the now-playing message in place with the station name, song, artist, artwork, and listener count. With `presence.songInStatus = true` the song also shows in the bot's status. Two server types are supported, picked automatically from the stream URL:
+- **Azuracast**: stream URLs of the form `https://host/listen/<station>/<mount>`, read from `https://host/api/nowplaying/<station>`.
+- **Icecast / Shoutcast-style**: any other http(s) URL, read from `/status-json.xsl` on the same host and port, matched by mount name.
+
+Stations that expose neither endpoint are left alone; nothing else changes for them.
+
+**Rejoining voice after a disconnect.** Stream persistence covers the stream dying. If instead the bot itself is thrown out of the voice channel while playing (a Discord voice outage, a region change, or someone dragging it out), enable this in the `voice` section:
+
+```hocon
+voice {
+  rejoinOnDisconnect = true
+  rejoinDelaySeconds = 5
+  rejoinMaxAttempts = 5   # per guild, per 5 minutes; 0 = unlimited
+}
+```
+
+The bot rejoins the channel it was in (or the server's default voice channel if that one is gone) as long as something is still playing. A watchdog also checks every 30 seconds for a playing bot that is not in voice. Stopping playback with the bot's own commands never triggers a rejoin, so use `stop` when you want it to leave for good.
 
 ## Proxy Configuration
 

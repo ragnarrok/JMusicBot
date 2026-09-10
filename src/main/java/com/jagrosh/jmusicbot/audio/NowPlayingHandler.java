@@ -121,6 +121,18 @@ public class NowPlayingHandler
         }
     }
 
+    /**
+     * The station behind a live stream reports a new song: refresh the now-playing message in
+     * place and, if enabled, show the song in the bot's status.
+     */
+    public void onStreamMetadataUpdate(long guildId, AudioTrack track, StreamMetadata metadata)
+    {
+        requestReconcile(guildId, "stream-metadata", false);
+
+        if (bot.getConfig().getSongInStatus() && metadata != null && metadata.songLine() != null && bot.getJDA() != null)
+            bot.getJDA().getPresence().setActivity(Activity.listening(metadata.songLine()));
+    }
+
     public void requestReconcile(long guildId)
     {
         requestReconcile(guildId, "manual", false);

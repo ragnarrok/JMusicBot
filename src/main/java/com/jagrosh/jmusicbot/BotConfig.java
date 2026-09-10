@@ -62,8 +62,11 @@ public class BotConfig {
             successEmoji, warningEmoji, errorEmoji, loadingEmoji, searchingEmoji,
             evalEngine, guiTheme;
     private boolean stayInChannel, songInGame, npImages, npMinimalMessage, npShowButtons, showNpProgressBar, updatealerts, useEval, dbots, useYouTubeOauth, guiEnabled;
-    private boolean streamPersist;
-    private long streamReconnectDelaySeconds, streamReconnectMaxDelaySeconds;
+    private boolean streamPersist, streamResumeOnRestart, streamMetadataEnabled;
+    private boolean voiceRejoinOnDisconnect;
+    private long voiceRejoinDelaySeconds;
+    private int voiceRejoinMaxAttempts;
+    private long streamReconnectDelaySeconds, streamReconnectMaxDelaySeconds, streamMetadataPollSeconds;
     private int streamReconnectMaxAttempts;
     private long owner, maxSeconds, aloneTimeUntilStop;
     private long clearChannelAgeDays;
@@ -278,8 +281,14 @@ public class BotConfig {
         streamReconnectDelaySeconds = Math.max(0L, STREAM_RECONNECT_DELAY_SECONDS.getLong(config));
         streamReconnectMaxDelaySeconds = Math.max(streamReconnectDelaySeconds, STREAM_RECONNECT_MAX_DELAY_SECONDS.getLong(config));
         streamReconnectMaxAttempts = Math.max(0, STREAM_RECONNECT_MAX_ATTEMPTS.getInt(config));
+        streamResumeOnRestart = STREAM_RESUME_ON_RESTART.getBoolean(config);
+        streamMetadataEnabled = STREAM_METADATA_ENABLED.getBoolean(config);
+        streamMetadataPollSeconds = Math.max(5L, STREAM_METADATA_POLL_SECONDS.getLong(config));
 
         aloneTimeUntilStop = ALONE_TIME_UNTIL_STOP.getLong(config);
+        voiceRejoinOnDisconnect = VOICE_REJOIN_ON_DISCONNECT.getBoolean(config);
+        voiceRejoinDelaySeconds = Math.max(1L, VOICE_REJOIN_DELAY_SECONDS.getLong(config));
+        voiceRejoinMaxAttempts = Math.max(0, VOICE_REJOIN_MAX_ATTEMPTS.getInt(config));
         playlistsFolder = PLAYLISTS_FOLDER.getString(config);
         aliases = ALIASES.getConfig(config);
         transforms = TRANSFORMS.getConfig(config);
@@ -539,6 +548,27 @@ public class BotConfig {
     }
 
     /**
+     * Returns true if the bot should rejoin voice when disconnected while something is playing.
+     */
+    public boolean rejoinVoiceOnDisconnect() {
+        return voiceRejoinOnDisconnect;
+    }
+
+    /**
+     * Seconds to wait before rejoining voice. Never below 1.
+     */
+    public long getVoiceRejoinDelaySeconds() {
+        return voiceRejoinDelaySeconds;
+    }
+
+    /**
+     * Maximum voice rejoin attempts per guild within a five-minute window. 0 means unlimited.
+     */
+    public int getVoiceRejoinMaxAttempts() {
+        return voiceRejoinMaxAttempts;
+    }
+
+    /**
      * Returns true if live streams that end unexpectedly should be reconnected automatically.
      */
     public boolean persistStreams() {
@@ -564,6 +594,27 @@ public class BotConfig {
      */
     public int getStreamReconnectMaxAttempts() {
         return streamReconnectMaxAttempts;
+    }
+
+    /**
+     * Returns true if a live stream that was playing at shutdown should be resumed on startup.
+     */
+    public boolean resumeStreamsOnRestart() {
+        return streamResumeOnRestart;
+    }
+
+    /**
+     * Returns true if the station's current song should be looked up and shown for live streams.
+     */
+    public boolean showStreamMetadata() {
+        return streamMetadataEnabled;
+    }
+
+    /**
+     * Seconds between station metadata polls. Never below 5.
+     */
+    public long getStreamMetadataPollSeconds() {
+        return streamMetadataPollSeconds;
     }
 
     public boolean isTooLong(AudioTrack track) {
