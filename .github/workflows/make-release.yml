@@ -118,9 +118,7 @@ jobs:
           artifacts: "*.jar"
           body: |
             ${{ github.event.inputs.info }}
-            
+
             ---
-            ### Setup
-            https://jmusicbot.com/setup  
-            https://jmusicbot.com/config  
-            # Download: [JMusicBot-${{ github.event.inputs.version_number }}.jar](https://github.com/ragnarrok/JMusicBot/releases/download/v${{ github.event.inputs.version_number }}/JMusicBot-${{ github.event.inputs.version_number }}.jar)
+            **Setup:** see the [README](https://github.com/${{ github.repository }}#setup) for setup, [running the jar](https://github.com/${{ github.repository }}#running-directly-without-docker) and [Docker](https://github.com/${{ github.repository }}#docker).
+            **Docker image:** `ghcr.io/ragnarrok/jmusicbot:${{ github.event.inputs.version_number }}`

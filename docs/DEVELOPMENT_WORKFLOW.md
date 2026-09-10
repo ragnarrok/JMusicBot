@@ -147,7 +147,7 @@ The `auto-release.yml` workflow is the only workflow that runs on pushes to `mas
 1. Runs the full test suite with coverage, uploads coverage to Codecov and builds the JAR (`mvn verify -Pcoverage`)
 2. Picks the next version: the `pom.xml` version if no tag exists for it yet, otherwise the next free patch number
 3. Stamps that version into the build (the JAR reports it) without committing anything, and tags the merged commit `vX.Y.Z`
-4. Publishes a GitHub release with auto-generated notes and the JAR attached
+4. Publishes a GitHub release with the JAR attached. The release notes are the description of the pull request that was merged (so write PR descriptions for users, not just reviewers), with a footer linking the README, the Docker image and the full changelog. A direct push without a PR falls back to the commit message.
 5. Dispatches `docker-publish.yml` on the new tag, which passes the version into the Docker build as `APP_VERSION`
 
 The workflow never pushes to `master`, so it is compatible with a branch ruleset that requires pull requests. `pom.xml` keeps a base version (bump it by hand for a minor or major release); the released version is recorded only in the tag. The tag is pushed with the workflow token, so it does not trigger further workflow runs.

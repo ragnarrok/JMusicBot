@@ -77,8 +77,12 @@ jobs:
             done
           fi
 
+          # Newest tag reachable from this commit, for the changelog compare link
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' "${{ github.sha }}" 2>/dev/null || true)
+
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
-          echo "Releasing $NEXT (pom.xml base version is $POM_VERSION)"
+          echo "previous_tag=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Releasing $NEXT (pom.xml base version is $POM_VERSION, previous tag: ${PREV:-none})"
 
       - name: Set version for this build (not committed)
         run: |
@@ -116,6 +120,60 @@ jobs:
           git tag -a "v${{ steps.version.outputs.next }}" -m "Release v${{ steps.version.outputs.next }}" "${{ github.sha }}"
           git push origin "v${{ steps.version.outputs.next }}"
 
+      - name: Write release notes
+        # The notes are the description of the pull request that was merged, falling
+        # back to the commit message for a direct push. jq writes the body verbatim so
+        # markdown, quotes and backticks in the PR survive untouched.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          NEXT: ${{ steps.version.outputs.next }}
+          PREV: ${{ steps.version.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          NOTES=release-notes.md
+          PR=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '[.[] | select(.merged_at != null)] | .[0] // empty' 2>/dev/null || true)
+
+          if [ -n "$PR" ]; then
+            NUMBER=$(jq -r '.number' <<< "$PR")
+            TITLE=$(jq -r '.title' <<< "$PR")
+            BODY=$(jq -r '.body // ""' <<< "$PR")
+            echo "Using the description of PR #$NUMBER: $TITLE"
+            {
+              echo "## $TITLE ([#$NUMBER](https://github.com/$REPO/pull/$NUMBER))"
+              echo
+              if [ -n "$BODY" ]; then
+                printf '%s\n' "$BODY"
+              else
+                echo "_The pull request had no description._"
+              fi
+            } > "$NOTES"
+          else
+            echo "No merged pull request found for $SHA; using the commit message"
+            {
+              echo "## $(git log -1 --format=%s "$SHA")"
+              echo
+              git log -1 --format=%b "$SHA"
+            } > "$NOTES"
+          fi
+
+          {
+            echo
+            echo "---"
+            echo "**Setup:** see the [README](https://github.com/$REPO#setup) for setup, [running the jar](https://github.com/$REPO#running-directly-without-docker) and [Docker](https://github.com/$REPO#docker)."
+            echo "**Docker image:** \`ghcr.io/ragnarrok/jmusicbot:$NEXT\`"
+            if [ -n "$PREV" ]; then
+              echo "**Full changelog:** https://github.com/$REPO/compare/$PREV...v$NEXT"
+            fi
+            echo
+            echo "<sub>Released automatically from master commit $SHA.</sub>"
+          } >> "$NOTES"
+
+          echo "::group::release-notes.md"
+          cat "$NOTES"
+          echo "::endgroup::"
+
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
@@ -125,16 +183,9 @@ jobs:
           name: v${{ steps.version.outputs.next }}
           draft: false
           prerelease: false
-          generateReleaseNotes: true
+          generateReleaseNotes: false
           artifacts: "JMusicBot-${{ steps.version.outputs.next }}.jar"
-          body: |
-            Automated release from master (${{ github.sha }}).
-
-            ---
-            ### Setup
-            https://jmusicbot.com/setup
-            https://jmusicbot.com/config
-            # Download: [JMusicBot-${{ steps.version.outputs.next }}.jar](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.next }}/JMusicBot-${{ steps.version.outputs.next }}.jar)
+          bodyFile: release-notes.md
 
       - name: Publish Docker image for the new tag
         # Tags pushed with GITHUB_TOKEN do not fire other workflows' push triggers,
