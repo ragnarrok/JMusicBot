@@ -1,20 +1,12 @@
 name: Publish Docker Image
 
-# Docker publishing workflow - gated by successful build-and-test completion
-# This ensures images are only published after tests pass on master
+# Builds and publishes the Docker image for a release tag.
+# Every release tag is the newest commit on master (auto-release.yml creates one
+# per code push), so the tag build is also what "latest" points at. There is no
+# separate master build: that would build the same code twice per merge.
 on:
-  # Triggered after successful build-and-test on master
-  # Note: The branches filter checks workflow_run.head_branch, which is the source branch
-  # of the triggering workflow. For PRs targeting master, head_branch is the PR source
-  # branch (not master), so this filter already excludes PR-triggered builds. Only direct
-  # pushes to master will have head_branch == 'master' and trigger this workflow.
-  workflow_run:
-    workflows: ["Build and Test"]
-    types:
-      - completed
-    branches:
-      - master
-  # Also trigger on version tags (v*) for releases
+  # Version tags pushed by hand (e.g. from the manual Make Release workflow once
+  # its draft is published)
   push:
     tags:
       - 'v*'
@@ -36,13 +28,9 @@ jobs:
     name: Publish Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Only run if the triggering workflow succeeded (for workflow_run events)
-    # For tag pushes and manual dispatches on a tag, always run
-    if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
-    
+    # Only ever build from a version tag, however the workflow was started
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+
     permissions:
       contents: read
       packages: write  # Required for pushing to GHCR
@@ -50,44 +38,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        # For workflow_run events, checkout the commit that triggered the original workflow
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ github.ref }}
           fetch-depth: 0  # Full history needed for git commands
 
       - name: Extract metadata
         id: metadata
         run: |
-          # Extract project version from pom.xml
+          VERSION="${GITHUB_REF#refs/tags/v}"
           POM_VERSION=$(grep -m 1 '<version>' pom.xml | sed 's/.*<version>\([^<]*\)<\/version>.*/\1/' | tr -d ' ')
           SHA_SHORT=$(git rev-parse --short HEAD)
           TIMESTAMP=$(git log -1 --format=%cI)
-          
-          # Determine if this is a tag build or master branch build
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            # For tag builds, use the git tag version (strip 'v' prefix)
-            VERSION="${GITHUB_REF#refs/tags/v}"
-            IS_TAG_BUILD="true"
-          else
-            # For master builds, use pom.xml version
-            VERSION="$POM_VERSION"
-            IS_TAG_BUILD="false"
+          if [[ "$VERSION" != "$POM_VERSION" ]]; then
+            echo "::warning::Tag version $VERSION differs from pom.xml version $POM_VERSION"
           fi
-          
-          # Check if version is a SNAPSHOT
-          if [[ "$VERSION" =~ -SNAPSHOT$ ]]; then
-            IS_SNAPSHOT="true"
-          else
-            IS_SNAPSHOT="false"
-          fi
-          
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "pom_version=$POM_VERSION" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA_SHORT" >> "$GITHUB_OUTPUT"
           echo "timestamp=$TIMESTAMP" >> "$GITHUB_OUTPUT"
-          echo "is_tag_build=$IS_TAG_BUILD" >> "$GITHUB_OUTPUT"
-          echo "is_snapshot=$IS_SNAPSHOT" >> "$GITHUB_OUTPUT"
-          echo "Extracted version: $VERSION (pom: $POM_VERSION), SHA: $SHA_SHORT, is_tag: $IS_TAG_BUILD, is_snapshot: $IS_SNAPSHOT"
+          echo "Building $VERSION (pom: $POM_VERSION) at $SHA_SHORT"
 
       - name: Generate Docker metadata
         id: meta
@@ -98,13 +66,10 @@ jobs:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Tag rules:
-          # - For tag builds: version tag (from git tag) + sha tag
-          # - For master builds: latest + sha. Version tags come only from release tags,
-          #   since auto-release.yml bumps the version after the master build has run.
+          # Tags: the release version, "latest", and the commit sha
           tags: |
-            type=raw,value=${{ steps.metadata.outputs.version }},enable=${{ steps.metadata.outputs.is_tag_build == 'true' }}
-            type=raw,value=latest,enable=${{ steps.metadata.outputs.is_tag_build == 'false' }}
+            type=raw,value=${{ steps.metadata.outputs.version }}
+            type=raw,value=latest
             type=raw,value=sha-${{ steps.metadata.outputs.sha }}
           # Labels are automatically generated from git context by metadata-action
           # No need to specify them - metadata-action will create standard OCI labels

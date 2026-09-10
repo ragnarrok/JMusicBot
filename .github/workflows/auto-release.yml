@@ -1,9 +1,12 @@
 name: Auto Release
 
-# Continuous releases from trunk.
-# Every push to master: run the full test suite, bump the patch version, build the
-# JAR, commit the version bump, tag it and publish a GitHub release with the JAR
-# attached. The Docker image for the new tag is then built by docker-publish.yml.
+# Continuous releases from trunk. This is the only workflow that runs on master pushes:
+# build-and-test.yml gates pull requests, and docker-publish.yml builds from the tag
+# created here.
+# Every push to master: run the full test suite (with coverage), bump the patch
+# version, build the JAR, commit the version bump, tag it and publish a GitHub release
+# with the JAR attached. The Docker image for the new tag is then built by
+# docker-publish.yml.
 #
 # Version rule: the pom.xml version (minus any -SNAPSHOT suffix) is used as-is when
 # no tag exists for it yet, so a manual minor/major bump in pom.xml is honoured.
@@ -82,10 +85,25 @@ jobs:
           mvn -B -q versions:set -DnewVersion=${{ steps.version.outputs.next }}
           mvn -B -q versions:commit
 
-      - name: Test and build
+      - name: Test and build with coverage
         run: |
           COMMIT_TIME=$(git log -1 --format=%cI)
-          mvn --batch-mode verify -Dproject.build.outputTimestamp=$COMMIT_TIME
+          mvn --batch-mode verify -Pcoverage -Dproject.build.outputTimestamp=$COMMIT_TIME
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          report_type: coverage
+          files: target/site/jacoco/jacoco.xml,target/site/jacoco-it/jacoco.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          report_type: test_results
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Rename JAR
         run: mv target/*-All.jar JMusicBot-${{ steps.version.outputs.next }}.jar

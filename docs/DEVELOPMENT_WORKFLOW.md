@@ -119,9 +119,7 @@ The `validate-branch-naming.yml` workflow automatically validates branch names o
 
 ### Build and Test
 
-The `build-and-test.yml` workflow runs on:
-- Pushes to `master` and all short-lived branches
-- Pull requests targeting `master`
+The `build-and-test.yml` workflow is the pre-merge gate. It runs on pull requests targeting `master` only; pushes to `master` are handled by Auto Release, which runs the same build before releasing.
 
 **What it does:**
 - Compiles the project
@@ -131,21 +129,22 @@ The `build-and-test.yml` workflow runs on:
 
 ### Docker Build
 
-The `docker-publish.yml` workflow builds and publishes Docker images:
-- After a successful "Build and Test" run on `master`: tags as `:latest` and `:sha-<commit>`
-- Version tags (e.g., `v0.7.1`), pushed by hand or dispatched by `auto-release.yml`: tags as `:0.7.1` and `:sha-<commit>`
+The `docker-publish.yml` workflow builds and publishes Docker images from version tags only:
+- Version tags (e.g., `v0.7.1`), pushed by hand or dispatched by `auto-release.yml`: tags as `:0.7.1`, `:latest` and `:sha-<commit>`
 - Preview images for any ref can be published manually with `publish-preview-image.yml`: tags as `:preview-<ref>`
 
+There is no separate `master` image build. Every release tag is the newest `master` commit, so `latest` always follows the latest release.
+
 **Image tags:**
-- `master`: `ghcr.io/ragnarrok/jmusicbot:latest`
+- Newest release: `ghcr.io/ragnarrok/jmusicbot:latest`
 - Version tag: `ghcr.io/ragnarrok/jmusicbot:0.7.1`
 - Preview: `ghcr.io/ragnarrok/jmusicbot:preview-feature-new-player-ui`
 
 ### Auto Release
 
-The `auto-release.yml` workflow runs on every push to `master` that touches code (documentation-only changes are ignored):
+The `auto-release.yml` workflow is the only workflow that runs on pushes to `master`. It runs on every push that touches code (documentation-only changes are ignored):
 
-1. Runs the full test suite and builds the JAR (`mvn verify`)
+1. Runs the full test suite with coverage, uploads coverage to Codecov and builds the JAR (`mvn verify -Pcoverage`)
 2. Picks the next version: the `pom.xml` version if no tag exists for it yet, otherwise the next free patch number
 3. Commits the version bump to `master` as `github-actions[bot]`, tags it `vX.Y.Z`
 4. Publishes a GitHub release with auto-generated notes and the JAR attached

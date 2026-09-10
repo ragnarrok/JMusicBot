@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/github/license/ragnarrok/JMusicBot.svg)](https://github.com/ragnarrok/JMusicBot/blob/master/LICENSE)
 [![Discord](https://discordapp.com/api/guilds/1453856673004392634/widget.png?v=1)](https://discord.gg/cyyUxNmmx6) <br>
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/ragnarrok/JMusicBot/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/ragnarrok/JMusicBot/tree/master)
-[![Build and Test](https://github.com/ragnarrok/JMusicBot/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/ragnarrok/JMusicBot/actions/workflows/build-and-test.yml)
+[![Auto Release](https://github.com/ragnarrok/JMusicBot/actions/workflows/auto-release.yml/badge.svg)](https://github.com/ragnarrok/JMusicBot/actions/workflows/auto-release.yml)
 [![CodeFactor](https://www.codefactor.io/repository/github/ragnarrok/jmusicbot/badge)](https://www.codefactor.io/repository/github/ragnarrok/jmusicbot)
 
 A cross-platform Discord music bot with a clean interface, and that is easy to set up and run yourself!
@@ -183,7 +183,7 @@ Check the [Docker Compose Example](docker-compose.example.yml) for more details.
 - **Config Persistence:** The `/musicbot` volume **must** be mounted for your configuration to persist. The bot reads and writes `config.txt` from `/musicbot` (the container's working directory).
 - **First Run:** If `config.txt` doesn't exist, the bot will generate a default one automatically. You'll need to edit it with your bot token before the bot can start.
 - **Image Tags:** 
-  - Use `ghcr.io/ragnarrok/jmusicbot:latest` for the latest build from the master branch
+  - Use `ghcr.io/ragnarrok/jmusicbot:latest` for the newest release (every code push to master becomes a release)
   - Use `ghcr.io/ragnarrok/jmusicbot:0.7.0` (replace with actual version) to pin a specific release version
   - Every build is also tagged `sha-<commit>`. Maintainers can publish `preview-<branch>` images for any ref by running the "Publish Preview Image" workflow manually
   - **Recommendation:** For production, pin your image tag rather than using `latest`
