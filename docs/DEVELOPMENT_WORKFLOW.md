@@ -146,11 +146,11 @@ The `auto-release.yml` workflow is the only workflow that runs on pushes to `mas
 
 1. Runs the full test suite with coverage, uploads coverage to Codecov and builds the JAR (`mvn verify -Pcoverage`)
 2. Picks the next version: the `pom.xml` version if no tag exists for it yet, otherwise the next free patch number
-3. Commits the version bump to `master` as `github-actions[bot]`, tags it `vX.Y.Z`
+3. Stamps that version into the build (the JAR reports it) without committing anything, and tags the merged commit `vX.Y.Z`
 4. Publishes a GitHub release with auto-generated notes and the JAR attached
-5. Dispatches `docker-publish.yml` on the new tag
+5. Dispatches `docker-publish.yml` on the new tag, which passes the version into the Docker build as `APP_VERSION`
 
-Because the bump commit and the tag are pushed with the workflow token, they do not trigger further workflow runs, so there is no loop.
+The workflow never pushes to `master`, so it is compatible with a branch ruleset that requires pull requests. `pom.xml` keeps a base version (bump it by hand for a minor or major release); the released version is recorded only in the tag. The tag is pushed with the workflow token, so it does not trigger further workflow runs.
 
 ## Best Practices
 
@@ -200,7 +200,7 @@ mvn versions:set -DnewVersion=0.8.0 && mvn versions:commit
 git commit -am "chore: bump version to 0.8.0"
 ```
 
-When that lands on `master`, the auto release uses `0.8.0` as-is (no tag exists for it yet) and continues with `0.8.1` from there.
+When that lands on `master`, the auto release uses `0.8.0` as-is (no tag exists for it yet) and continues with `0.8.1`, `0.8.2`, … from there while `pom.xml` stays at `0.8.0`.
 
 The manual **"Make Release"** workflow still exists for special cases, such as a pre-release from a branch or a release with a hand-written description. Publish its draft promptly: if a code commit lands on `master` while the draft is unpublished, the auto release will claim that version number first.
 

@@ -45,17 +45,15 @@ jobs:
       - name: Extract metadata
         id: metadata
         run: |
+          # The version comes from the tag; pom.xml only holds a base version and is
+          # overridden inside the Docker build via the APP_VERSION build argument.
           VERSION="${GITHUB_REF#refs/tags/v}"
-          POM_VERSION=$(grep -m 1 '<version>' pom.xml | sed 's/.*<version>\([^<]*\)<\/version>.*/\1/' | tr -d ' ')
           SHA_SHORT=$(git rev-parse --short HEAD)
           TIMESTAMP=$(git log -1 --format=%cI)
-          if [[ "$VERSION" != "$POM_VERSION" ]]; then
-            echo "::warning::Tag version $VERSION differs from pom.xml version $POM_VERSION"
-          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA_SHORT" >> "$GITHUB_OUTPUT"
           echo "timestamp=$TIMESTAMP" >> "$GITHUB_OUTPUT"
-          echo "Building $VERSION (pom: $POM_VERSION) at $SHA_SHORT"
+          echo "Building $VERSION at $SHA_SHORT"
 
       - name: Generate Docker metadata
         id: meta
@@ -81,6 +79,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           annotations: ${{ steps.meta.outputs.annotations }}
           timestamp: ${{ steps.metadata.outputs.timestamp }}
+          version: ${{ steps.metadata.outputs.version }}
           registry: ${{ env.REGISTRY }}
           image-name: ${{ env.IMAGE_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}

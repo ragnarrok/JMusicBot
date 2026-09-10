@@ -347,7 +347,7 @@ This project follows a **trunk-based development** workflow. The `master` branch
 
 Branch names are automatically validated by CI to ensure consistency (lowercase letters, digits and hyphens only; `feat/` is not accepted, use `feature/`). For detailed information about the development workflow, branch naming rules, and best practices, see [DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md). An overview of the code structure lives in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Every code push to `master` is tested and, if green, automatically released: the patch version is bumped, a `vX.Y.Z` tag and GitHub release with the JAR are created, and a matching Docker image is published. Bump the minor or major version in `pom.xml` yourself when a change warrants it.
+Every code push to `master` is tested and, if green, automatically released: the next patch version is worked out from the existing tags, the merged commit is tagged `vX.Y.Z`, a GitHub release with the JAR is created, and a matching Docker image is published. Nothing is committed back to `master`, so the branch can be fully protected. Bump the minor or major version in `pom.xml` yourself when a change warrants it.
 
 To build from source you need JDK 25+ and Maven 3.9+:
 

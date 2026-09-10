@@ -7,6 +7,11 @@ FROM maven:3.9.12-eclipse-temurin-25-alpine AS builder
 ARG BUILD_TIMESTAMP
 ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
 
+# Release version to stamp into the jar (e.g. 0.7.3). The version lives in git tags,
+# not in pom.xml, so the release pipeline passes it in. Empty = keep pom.xml's version.
+ARG APP_VERSION
+ENV APP_VERSION=$APP_VERSION
+
 WORKDIR /build
 
 # Copy pom.xml first for better layer caching
@@ -22,6 +27,9 @@ COPY --link src ./src
 
 # Build the application with BuildKit cache mount
 RUN --mount=type=cache,target=/root/.m2/repository \
+    if [ -n "$APP_VERSION" ]; then \
+      mvn -B -q versions:set -DnewVersion="$APP_VERSION" && mvn -B -q versions:commit; \
+    fi && \
     if [ -n "$BUILD_TIMESTAMP" ]; then \
       mvn clean package -DskipTests -B -Pdocker -Dproject.build.outputTimestamp="$BUILD_TIMESTAMP"; \
     else \

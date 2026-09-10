@@ -3,10 +3,15 @@ name: Auto Release
 # Continuous releases from trunk. This is the only workflow that runs on master pushes:
 # build-and-test.yml gates pull requests, and docker-publish.yml builds from the tag
 # created here.
-# Every push to master: run the full test suite (with coverage), bump the patch
-# version, build the JAR, commit the version bump, tag it and publish a GitHub release
-# with the JAR attached. The Docker image for the new tag is then built by
+#
+# Every push to master: run the full test suite (with coverage), work out the next
+# version, build the JAR with that version, tag the merged commit and publish a GitHub
+# release with the JAR attached. The Docker image for the new tag is then built by
 # docker-publish.yml.
+#
+# This workflow never commits to master, so it works with a branch ruleset that
+# requires pull requests. pom.xml keeps a base version; the real version lives in the
+# tags and is injected at build time (here and in the Docker build).
 #
 # Version rule: the pom.xml version (minus any -SNAPSHOT suffix) is used as-is when
 # no tag exists for it yet, so a manual minor/major bump in pom.xml is honoured.
@@ -25,7 +30,7 @@ on:
       - '*.example.yaml'
       - '.circleci/**'
 
-# Releases must never run concurrently: two runs would fight over the version bump.
+# Releases must never run concurrently: two runs would race for the same version.
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -35,11 +40,8 @@ jobs:
     name: Test, Build and Release
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Guard against loops if the version-bump commit is ever pushed with a token
-    # that does trigger workflows (pushes made with GITHUB_TOKEN never do).
-    if: github.actor != 'github-actions[bot]'
     permissions:
-      contents: write   # push the version bump + tag, create the release
+      contents: write   # push the tag, create the release
       actions: write    # dispatch docker-publish for the new tag
     steps:
       - name: Checkout repository
@@ -75,12 +77,10 @@ jobs:
             done
           fi
 
-          echo "pom_version=$POM_VERSION" >> "$GITHUB_OUTPUT"
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
-          echo "Releasing $NEXT (pom.xml was $POM_VERSION)"
+          echo "Releasing $NEXT (pom.xml base version is $POM_VERSION)"
 
-      - name: Set version in pom.xml
-        if: steps.version.outputs.pom_version != steps.version.outputs.next
+      - name: Set version for this build (not committed)
         run: |
           mvn -B -q versions:set -DnewVersion=${{ steps.version.outputs.next }}
           mvn -B -q versions:commit
@@ -108,30 +108,20 @@ jobs:
       - name: Rename JAR
         run: mv target/*-All.jar JMusicBot-${{ steps.version.outputs.next }}.jar
 
-      - name: Commit version bump and tag
-        id: tag
+      - name: Tag the merged commit
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add pom.xml
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: bump version to ${{ steps.version.outputs.next }} [skip ci]"
-            # Another commit may have landed on master while we were building; rebase once and retry.
-            git push origin HEAD:master || (git pull --rebase origin master && git push origin HEAD:master)
-          fi
-
-          git tag -a "v${{ steps.version.outputs.next }}" -m "Release v${{ steps.version.outputs.next }}"
+          git tag -a "v${{ steps.version.outputs.next }}" -m "Release v${{ steps.version.outputs.next }}" "${{ github.sha }}"
           git push origin "v${{ steps.version.outputs.next }}"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: v${{ steps.version.outputs.next }}
-          commit: ${{ steps.tag.outputs.sha }}
+          commit: ${{ github.sha }}
           name: v${{ steps.version.outputs.next }}
           draft: false
           prerelease: false

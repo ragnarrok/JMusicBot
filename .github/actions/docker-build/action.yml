@@ -11,6 +11,10 @@ inputs:
   timestamp:
     description: 'Build timestamp in ISO 8601 format'
     required: true
+  version:
+    description: 'Release version to stamp into the jar (e.g. 0.7.3). Empty keeps the pom.xml version.'
+    required: false
+    default: ''
   registry:
     description: 'Container registry (e.g., ghcr.io)'
     required: false
@@ -65,6 +69,7 @@ runs:
         platforms: linux/amd64,linux/arm64
         build-args: |
           BUILD_TIMESTAMP=${{ inputs.timestamp }}
+          APP_VERSION=${{ inputs.version }}
 
     - name: Image digest
       shell: bash
