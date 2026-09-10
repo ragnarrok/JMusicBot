@@ -9,26 +9,17 @@
 [![Stars](https://img.shields.io/github/stars/ragnarrok/JMusicBot.svg)](https://github.com/ragnarrok/JMusicBot/stargazers)
 [![Release](https://img.shields.io/github/release/ragnarrok/JMusicBot.svg)](https://github.com/ragnarrok/JMusicBot/releases/latest)
 [![License](https://img.shields.io/github/license/ragnarrok/JMusicBot.svg)](https://github.com/ragnarrok/JMusicBot/blob/master/LICENSE)
-[![Discord](https://discordapp.com/api/guilds/1453856673004392634/widget.png?v=1)](https://discord.gg/cyyUxNmmx6) <br>
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/ragnarrok/JMusicBot/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/ragnarrok/JMusicBot/tree/master)
 [![Auto Release](https://github.com/ragnarrok/JMusicBot/actions/workflows/auto-release.yml/badge.svg)](https://github.com/ragnarrok/JMusicBot/actions/workflows/auto-release.yml)
-[![CodeFactor](https://www.codefactor.io/repository/github/ragnarrok/jmusicbot/badge)](https://www.codefactor.io/repository/github/ragnarrok/jmusicbot)
 
 A cross-platform Discord music bot with a clean interface, and that is easy to set up and run yourself!
 
-## ⚠️ Check your Java Version and other requirements
+## Requirements
 
-This version of JMusicBot changes/updates various dependencies. To ensure your bot continues to function correctly, please note the following mandatory changes:
-
-*   **Java 25 Minimum:** The bot now requires **Java 25 or higher**. 
-
+*   **Java 25 or higher.**
 *   **jdave/udpqueue:** You **must** have **glibc >= 2.38**. *If you are using Docker, this is already handled for you.*
 *   **Privileged Gateway Intents:** You **must** enable the **Message Content Intent** in your [Discord Developer Portal](https://discord.com/developers/applications).
     *   *Navigate to: Your Application > Bot > Privileged Gateway Intents > Toggle "Message Content Intent" to ON.*
     *   *Without this, the bot will not see your prefix commands (e.g. `!play`). Slash commands (`/play`) work without it.*
-
-
-[![Setup](http://i.imgur.com/VvXYp5j.png)](https://jmusicbot.com/setup)
 
 ## Features
   * Easy to run (just make sure Java is installed, and run!)
@@ -73,7 +64,7 @@ Each source can be enabled or disabled individually under `playback.audioSources
 ![Loading Example...](https://i.imgur.com/kVtTKvS.gif)
 
 ## Setup
-Please see the [Setup Page](https://jmusicbot.com/setup) to run this bot yourself!
+Follow the upstream [Setup Page](https://jmusicbot.com/setup) to create the bot account, get a token, and invite the bot. Then download the jar from this repository's [releases](https://github.com/ragnarrok/JMusicBot/releases/latest) (or use the Docker image below) and run it as described in the next section. All configuration lives in `config.txt`; the options added by this fork are documented further down.
 
 ## Running Directly (Without Docker)
 
@@ -115,7 +106,6 @@ sudo apt-get update
 sudo apt-get install -y libopus0 libsodium23
 ```
 
-
 If your version is below 2.38, you will need to upgrade your system or use a compatible runtime. (You can also use Docker, which is recommended.)
 
 ## Docker
@@ -142,7 +132,7 @@ This mounts your current directory as the musicbot volume, so the bot will use y
 1. **Create a directory for your bot and run the container:**
    ```bash
    mkdir -p /path/to/jmusicbot
-   
+
    docker run --rm -it \
      --name jmusicbot \
      -v "/path/to/musicbot:/musicbot" \
@@ -182,14 +172,13 @@ Check the [Docker Compose Example](docker-compose.example.yml) for more details.
 
 - **Config Persistence:** The `/musicbot` volume **must** be mounted for your configuration to persist. The bot reads and writes `config.txt` from `/musicbot` (the container's working directory).
 - **First Run:** If `config.txt` doesn't exist, the bot will generate a default one automatically. You'll need to edit it with your bot token before the bot can start.
-- **Image Tags:** 
+- **Image Tags:**
   - Use `ghcr.io/ragnarrok/jmusicbot:latest` for the newest release (every code push to master becomes a release)
   - Use `ghcr.io/ragnarrok/jmusicbot:0.7.0` (replace with actual version) to pin a specific release version
   - Every build is also tagged `sha-<commit>`. Maintainers can publish `preview-<branch>` images for any ref by running the "Publish Preview Image" workflow manually
   - **Recommendation:** For production, pin your image tag rather than using `latest`
 - **File Permissions:** The container runs as the non-root user `jmusicbot` (UID 10001). Make sure the mounted directory is writable by that UID (`chown 10001:10001 /path/to/musicbot`), or set `user:` in your compose file to your own UID/GID.
 - **JAVA_OPTS:** The container uses ZGC and AlwaysPreTouch by default. Set `JAVA_OPTS` to add heap limits (e.g. `-Xms256m -Xmx512m`) or other flags. See [Performance Tuning](#performance-tuning) for details.
-
 
 To view published images, visit: `https://github.com/ragnarrok/JMusicBot/pkgs/container/jmusicbot`
 
@@ -230,7 +219,7 @@ The bot includes configurable audio buffers that protect against GC pauses. Thes
 performance {
   # NAS buffer duration in ms (protects against JVM pauses up to this duration)
   nasBufferMs = 800
-  
+
   # Lavaplayer frame buffer duration in ms (amount of decoded audio to buffer)
   frameBufferMs = 2000
 }
@@ -308,7 +297,7 @@ proxy {
   # Proxy server hostname and port
   host = "127.0.0.1"
   port = 8080
-  
+
   # Enable proxy for specific components
   lavaplayer = true   # Audio source requests (YouTube, SoundCloud, etc.)
   jda = false         # Discord API traffic
@@ -368,17 +357,13 @@ mvn verify
 
 The runnable jar is written to `target/JMusicBot-<version>-All.jar`.
 
-## Questions/Suggestions/Bug Reports
-**Please read the [Issues List](https://github.com/ragnarrok/JMusicBot/issues) before suggesting a feature**. 
+## Questions and Bug Reports
+Please search the [issues](https://github.com/ragnarrok/JMusicBot/issues) before opening a new one. For a reproducible bug, include the bot version (logged at startup), the relevant part of `config.txt` with the token removed, and the log output around the problem.
 
-If you have a question, need troubleshooting help, or want to brainstorm a new feature, please start a [Discussion](https://github.com/ragnarrok/JMusicBot/discussions).
-
-The Discord server is also available for questions and suggestions. [Click here to join](https://discord.gg/cyyUxNmmx6).
-
- If you'd like to suggest a feature or report a reproducible bug, please open an [Issue](https://github.com/ragnarrok/JMusicBot/issues) on this repository. If you like this bot, be sure to add a star to the libraries that make this possible: 
+This bot is built on:
  - [**JDA**](https://github.com/discord-jda/JDA)
  - [**lavaplayer**](https://github.com/lavalink-devs/lavaplayer)
  - [**youtube-source**](https://github.com/lavalink-devs/youtube-source)
 
-## Editing
-This bot (and the source code here) might not be easy to edit for inexperienced programmers. The main purpose of having the source public is to show the capabilities of the libraries, to allow others to understand how the bot works, and to allow those knowledgeable about java, JDA, and Discord bot development to contribute. There are many requirements and dependencies required to edit and compile it, and there will not be support provided for people looking to make changes on their own. Instead, consider making a feature request (see the above section). If you choose to make edits, please do so in accordance with the Apache 2.0 License.
+## Contributing
+Pull requests are welcome. Branch from `master` using the naming rules above, keep changes focused, and make sure `mvn verify` passes. Everything merged to `master` is released automatically. The code is licensed under the Apache 2.0 License; see [LICENSE](LICENSE).
