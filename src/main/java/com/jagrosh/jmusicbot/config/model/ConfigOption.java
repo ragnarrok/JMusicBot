@@ -60,6 +60,7 @@ public enum ConfigOption {
     STREAM_PERSIST("playback.streams.persist", ConfigType.BOOLEAN, false, "Whether live streams that drop unexpectedly are reconnected automatically"),
 
     // Stream reconnect options
+    STREAM_READ_TIMEOUT_SECONDS("playback.streams.readTimeoutSeconds", ConfigType.LONG, false, "Seconds the HTTP source waits for stream data before giving up on the track"),
     STREAM_RECONNECT_DELAY_SECONDS("playback.streams.reconnectDelaySeconds", ConfigType.LONG, false, "Seconds before the first stream reconnect attempt (doubles per attempt)"),
     STREAM_RECONNECT_MAX_DELAY_SECONDS("playback.streams.reconnectMaxDelaySeconds", ConfigType.LONG, false, "Upper bound in seconds for the stream reconnect delay"),
     STREAM_RECONNECT_MAX_ATTEMPTS("playback.streams.reconnectMaxAttempts", ConfigType.INT, false, "Max consecutive stream reconnect attempts (0 = unlimited)"),

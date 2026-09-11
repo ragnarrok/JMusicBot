@@ -66,7 +66,7 @@ public class BotConfig {
     private boolean voiceRejoinOnDisconnect;
     private long voiceRejoinDelaySeconds;
     private int voiceRejoinMaxAttempts;
-    private long streamReconnectDelaySeconds, streamReconnectMaxDelaySeconds, streamMetadataPollSeconds;
+    private long streamReconnectDelaySeconds, streamReconnectMaxDelaySeconds, streamMetadataPollSeconds, streamReadTimeoutSeconds;
     private int streamReconnectMaxAttempts;
     private long owner, maxSeconds, aloneTimeUntilStop;
     private long clearChannelAgeDays;
@@ -284,6 +284,7 @@ public class BotConfig {
         streamResumeOnRestart = STREAM_RESUME_ON_RESTART.getBoolean(config);
         streamMetadataEnabled = STREAM_METADATA_ENABLED.getBoolean(config);
         streamMetadataPollSeconds = Math.max(5L, STREAM_METADATA_POLL_SECONDS.getLong(config));
+        streamReadTimeoutSeconds = Math.max(1L, STREAM_READ_TIMEOUT_SECONDS.getLong(config));
 
         aloneTimeUntilStop = ALONE_TIME_UNTIL_STOP.getLong(config);
         voiceRejoinOnDisconnect = VOICE_REJOIN_ON_DISCONNECT.getBoolean(config);
@@ -615,6 +616,14 @@ public class BotConfig {
      */
     public long getStreamMetadataPollSeconds() {
         return streamMetadataPollSeconds;
+    }
+
+    /**
+     * Seconds the HTTP audio source waits for more stream data before treating the track as
+     * ended. Never below 1.
+     */
+    public long getStreamReadTimeoutSeconds() {
+        return streamReadTimeoutSeconds;
     }
 
     public boolean isTooLong(AudioTrack track) {

@@ -1,6 +1,6 @@
 services:
   jmusicbot:
-    image: ghcr.io/ragnarrok/jmusicbot:latest # or ghcr.io/ragnarrok/jmusicbot:0.7.0 for a specific version
+    image: ghcr.io/ragnarrok/jmusicbot:latest # or ghcr.io/ragnarrok/jmusicbot:0.7.3 for a specific version
     container_name: jmusicbot
     # The container runs as non-root user 'jmusicbot' (UID 10001) for security.
     # Ensure the mounted volume directory is readable/writable by UID 10001,

@@ -72,12 +72,12 @@ When running JMusicBot directly (not in Docker), make sure to pass these JVM fla
 
 **Linux / macOS / Windows (CMD):**
 ```bash
-java -Dfile.encoding=UTF-8 -Dnogui=true --enable-native-access=ALL-UNNAMED -jar JMusicBot-0.7.0-All.jar
+java -Dfile.encoding=UTF-8 -Dnogui=true --enable-native-access=ALL-UNNAMED -jar JMusicBot-0.7.3-All.jar
 ```
 
 **Windows (PowerShell):** PowerShell treats `-D` as its own parameter. Quote each JVM option so they are passed to `java` correctly:
 ```powershell
-java "-Dfile.encoding=UTF-8" "-Dnogui=true" "--enable-native-access=ALL-UNNAMED" "-jar" ".\JMusicBot-0.7.0-All.jar"
+java "-Dfile.encoding=UTF-8" "-Dnogui=true" "--enable-native-access=ALL-UNNAMED" "-jar" ".\JMusicBot-0.7.3-All.jar"
 ```
 Alternatively, use the stop-parsing token so the rest of the line is passed literally: `java --% -Dfile.encoding=UTF-8 -Dnogui=true ...`
 
@@ -174,7 +174,7 @@ Check the [Docker Compose Example](docker-compose.example.yml) for more details.
 - **First Run:** If `config.txt` doesn't exist, the bot will generate a default one automatically. You'll need to edit it with your bot token before the bot can start.
 - **Image Tags:**
   - Use `ghcr.io/ragnarrok/jmusicbot:latest` for the newest release (every code push to master becomes a release)
-  - Use `ghcr.io/ragnarrok/jmusicbot:0.7.0` (replace with actual version) to pin a specific release version
+  - Use `ghcr.io/ragnarrok/jmusicbot:0.7.3` (replace with actual version) to pin a specific release version
   - Every build is also tagged `sha-<commit>`. Maintainers can publish `preview-<branch>` images for any ref by running the "Publish Preview Image" workflow manually
   - **Recommendation:** For production, pin your image tag rather than using `latest`
 - **File Permissions:** The container runs as the non-root user `jmusicbot` (UID 10001). Make sure the mounted directory is writable by that UID (`chown 10001:10001 /path/to/musicbot`), or set `user:` in your compose file to your own UID/GID.
@@ -236,6 +236,9 @@ Turn on stream persistence in `config.txt` (or in the desktop GUI under the Conf
 ```hocon
 playback {
   streams {
+    # How long a station may pause before the stream counts as ended (lavaplayer's own default is 3s)
+    readTimeoutSeconds = 30
+
     # Reconnect live streams that stop unexpectedly
     persist = true
 
@@ -259,7 +262,8 @@ playback {
 ```
 
 **How it works:**
-- Only live streams (tracks with no known duration) are affected. Normal songs, playlists and local files behave exactly as before.
+- `readTimeoutSeconds` applies to every HTTP stream regardless of the other settings. Radio servers often send nothing for a few seconds at a track change (crossfades, encoder restarts), and lavaplayer's built-in 3-second read timeout turns each such pause into a dropped track, which with persistence on means a reconnect and, on Icecast, a replay of the last few seconds. With a 30-second timeout those pauses are simply absorbed by the frame buffer (raise `performance.frameBufferMs` so they're inaudible). A stream that stops for good is still caught by the 10-second stuck detector.
+- Only live streams (tracks with no known duration) are affected by the settings below. Normal songs, playlists and local files behave exactly as before.
 - A stream is reconnected when it ends on its own, fails to load, or stalls for longer than lavaplayer's stuck threshold (10 seconds). The now-playing message is kept while the bot reconnects.
 - `stop`, `skip`, `forceskip`, `skipto` and playing something else never trigger a reconnect. Queuing another track while a reconnect is pending cancels the reconnect.
 - Each consecutive failure doubles the wait (5s, 10s, 20s, 40s, 60s, 60s, ...). The counter resets once the stream has played for 30 seconds, so a brief blip always retries quickly.

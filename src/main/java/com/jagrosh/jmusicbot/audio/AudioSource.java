@@ -21,6 +21,8 @@ import java.nio.file.NoSuchFileException;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
+import org.apache.http.client.config.RequestConfig;
 
 import com.sedmelluq.discord.lavaplayer.container.MediaContainerRegistry;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
@@ -125,7 +127,11 @@ public enum AudioSource
         "http",
         "Direct HTTP audio links",
         100,
-        (manager, config) -> manager.registerSourceManager(new HttpAudioSourceManager(MediaContainerRegistry.DEFAULT_REGISTRY))
+        (manager, config) -> {
+            HttpAudioSourceManager http = new HttpAudioSourceManager(MediaContainerRegistry.DEFAULT_REGISTRY);
+            http.configureRequests(streamReadTimeoutConfigurator(config.getStreamReadTimeoutSeconds()));
+            manager.registerSourceManager(http);
+        }
     ),
     LOCAL(
         "local",
@@ -216,6 +222,20 @@ public enum AudioSource
      * @param manager the player manager to register with
      * @param config the bot configuration
      */
+    /**
+     * Request configurator that raises the HTTP source's socket read timeout, so a radio server
+     * pausing for a few seconds at a track change is not mistaken for the end of the stream.
+     * Lavaplayer's own default is 3 seconds.
+     *
+     * @param seconds read timeout in seconds; values below 1 are treated as 1
+     */
+    public static Function<RequestConfig, RequestConfig> streamReadTimeoutConfigurator(long seconds)
+    {
+        long clampedSeconds = Math.min(Math.max(1L, seconds), Integer.MAX_VALUE / 1000L);
+        int timeoutMs = (int) (clampedSeconds * 1000L);
+        return requestConfig -> RequestConfig.copy(requestConfig).setSocketTimeout(timeoutMs).build();
+    }
+
     public void register(DefaultAudioPlayerManager manager, BotConfig config)
     {
         registrationAction.accept(manager, config);

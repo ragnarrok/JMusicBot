@@ -77,6 +77,7 @@ public class ConfigPanel extends JPanel {
     private final JCheckBox resumeOnRestartCheckBox;
     private final JCheckBox streamMetadataCheckBox;
     private final JSpinner metadataPollSpinner;
+    private final JSpinner readTimeoutSpinner;
 
     // UI/Emojis section
     private final JTextField successEmojiField;
@@ -136,6 +137,7 @@ public class ConfigPanel extends JPanel {
         resumeOnRestartCheckBox = new JCheckBox("Resume the stream after a bot restart");
         streamMetadataCheckBox = new JCheckBox("Show the station's current song (Azuracast / Icecast)");
         metadataPollSpinner = new JSpinner(new SpinnerNumberModel(15, 5, 600, 5));
+        readTimeoutSpinner = new JSpinner(new SpinnerNumberModel(30, 1, 600, 5));
         streamMetadataCheckBox.addActionListener(e -> metadataPollSpinner.setEnabled(streamMetadataCheckBox.isSelected()));
 
         // UI/Emojis
@@ -353,7 +355,7 @@ public class ConfigPanel extends JPanel {
     private JPanel createStreamsSection() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(new TitledBorder("Live Streams"));
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 210));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 240));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4, 8, 4, 8);
@@ -407,6 +409,18 @@ public class ConfigPanel extends JPanel {
         panel.add(new JLabel("Song Check Interval (seconds):"), gbc);
         gbc.gridx = 1;
         panel.add(metadataPollSpinner, gbc);
+
+        // Row 6: HTTP read timeout
+        gbc.gridx = 0; gbc.gridy = 6;
+        panel.add(new JLabel("Stream Read Timeout (seconds):"), gbc);
+        gbc.gridx = 1;
+        panel.add(readTimeoutSpinner, gbc);
+        gbc.gridx = 2;
+        gbc.gridwidth = 2;
+        JLabel timeoutHint = new JLabel("<html><i>How long a station may pause (e.g. at track changes) before the stream counts as ended.</i></html>");
+        timeoutHint.setFont(timeoutHint.getFont().deriveFont(10f));
+        timeoutHint.setForeground(Color.GRAY);
+        panel.add(timeoutHint, gbc);
 
         return panel;
     }
@@ -571,6 +585,7 @@ public class ConfigPanel extends JPanel {
         resumeOnRestartCheckBox.setSelected(config.resumeStreamsOnRestart());
         streamMetadataCheckBox.setSelected(config.showStreamMetadata());
         metadataPollSpinner.setValue((int) Math.max(5, Math.min(600, config.getStreamMetadataPollSeconds())));
+        readTimeoutSpinner.setValue((int) Math.max(1, Math.min(600, config.getStreamReadTimeoutSeconds())));
         metadataPollSpinner.setEnabled(config.showStreamMetadata());
         updateStreamControlsEnabled();
 
@@ -668,6 +683,7 @@ public class ConfigPanel extends JPanel {
         updates.put("playback.streams.resumeOnRestart", String.valueOf(resumeOnRestartCheckBox.isSelected()));
         updates.put("playback.streams.metadata.enabled", String.valueOf(streamMetadataCheckBox.isSelected()));
         updates.put("playback.streams.metadata.pollIntervalSeconds", String.valueOf(metadataPollSpinner.getValue()));
+        updates.put("playback.streams.readTimeoutSeconds", String.valueOf(readTimeoutSpinner.getValue()));
 
         // UI/Emojis
         updates.put("ui.emojis.success", quoteString(successEmojiField.getText()));
