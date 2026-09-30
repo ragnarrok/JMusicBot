@@ -4,7 +4,7 @@ name: Auto Release
 # build-and-test.yml gates pull requests, and docker-publish.yml builds from the tag
 # created here.
 #
-# Every push to master: run the full test suite (with coverage), work out the next
+# Every push to master: run the full test suite, work out the next
 # version, build the JAR with that version, tag the merged commit and publish a GitHub
 # release with the JAR attached. The Docker image for the new tag is then built by
 # docker-publish.yml.
@@ -28,7 +28,6 @@ on:
       - 'docs/**'
       - '*.example.yml'
       - '*.example.yaml'
-      - '.circleci/**'
 
 # Releases must never run concurrently: two runs would race for the same version.
 concurrency:
@@ -89,25 +88,11 @@ jobs:
           mvn -B -q versions:set -DnewVersion=${{ steps.version.outputs.next }}
           mvn -B -q versions:commit
 
-      - name: Test and build with coverage
+      - name: Test and build
         run: |
           COMMIT_TIME=$(git log -1 --format=%cI)
-          mvn --batch-mode verify -Pcoverage -Dproject.build.outputTimestamp=$COMMIT_TIME
+          mvn --batch-mode verify -Dproject.build.outputTimestamp=$COMMIT_TIME
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          report_type: coverage
-          files: target/site/jacoco/jacoco.xml,target/site/jacoco-it/jacoco.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          report_type: test_results
-          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Rename JAR
         run: mv target/*-All.jar JMusicBot-${{ steps.version.outputs.next }}.jar

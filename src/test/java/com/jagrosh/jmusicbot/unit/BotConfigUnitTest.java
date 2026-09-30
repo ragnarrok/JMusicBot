@@ -77,6 +77,7 @@ class BotConfigUnitTest extends BaseConfigTest {
             assertEquals(60L, config.getStreamReconnectMaxDelaySeconds());
             assertEquals(0, config.getStreamReconnectMaxAttempts());
             assertEquals(30L, config.getStreamReadTimeoutSeconds());
+            assertFalse(config.streamDiagnostics());
         }
 
         @Test
@@ -88,9 +89,11 @@ class BotConfigUnitTest extends BaseConfigTest {
                 playback.streams.reconnectMaxDelaySeconds = 30
                 playback.streams.reconnectMaxAttempts = 7
                 playback.streams.readTimeoutSeconds = 45
+                logging.streamDiagnostics = true
                 """);
 
             assertEquals(45L, config.getStreamReadTimeoutSeconds());
+            assertTrue(config.streamDiagnostics());
             assertTrue(config.persistStreams());
             assertEquals(2L, config.getStreamReconnectDelaySeconds());
             assertEquals(30L, config.getStreamReconnectMaxDelaySeconds());

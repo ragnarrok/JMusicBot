@@ -56,6 +56,7 @@ public enum ConfigOption {
     NP_SHOW_PROGRESS_BAR("nowPlaying.showProgressBar", ConfigType.BOOLEAN, false, "Whether to show the now-playing progress bar"),
     UPDATE_ALERTS("updates.alerts", ConfigType.BOOLEAN, false, "Whether to alert owner about updates"),
     USE_EVAL("dangerous.eval", ConfigType.BOOLEAN, false, "Whether to enable eval command (DANGEROUS)"),
+    STREAM_DIAGNOSTICS("logging.streamDiagnostics", ConfigType.BOOLEAN, false, "Whether to write verbose live-stream diagnostics to stream-diagnostics.log"),
     USE_YOUTUBE_OAUTH("playback.youtube.useOAuth", ConfigType.BOOLEAN, false, "Whether to use YouTube OAuth2 for playback"),
     STREAM_PERSIST("playback.streams.persist", ConfigType.BOOLEAN, false, "Whether live streams that drop unexpectedly are reconnected automatically"),
 

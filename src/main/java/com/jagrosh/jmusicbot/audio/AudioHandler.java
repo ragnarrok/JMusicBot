@@ -75,6 +75,8 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
 
     // Live stream persistence: reconnect streams that drop instead of letting the queue end.
     private final StreamReconnectPolicy streamReconnect;
+    /** Reports audio gaps on live streams together with the buffer level leading up to them. */
+    private final StreamDiagnostics streamDiagnostics;
     private final Object reconnectLock = new Object();
     private ScheduledFuture<?> pendingReconnect;
     private int reconnectGeneration;
@@ -87,6 +89,8 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
         this.audioPlayer = player;
         this.guildId = guild.getIdLong();
         this.streamReconnect = StreamReconnectPolicy.fromConfig(manager.getBot().getConfig());
+        this.streamDiagnostics = new StreamDiagnostics(guildId,
+                manager.getBot().getConfig().streamDiagnostics(), manager.getBot().getThreadpool());
         // Use NO_OP listener in no-GUI mode to avoid memory allocation
         this.metricsListener = manager.getBot().isNoGUI() 
             ? AudioMetricsListener.NO_OP 
@@ -226,7 +230,10 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
         if (service == null || !StreamReconnectPolicy.isLiveStream(track))
             return;
         service.start(guildId, track, (gid, t, metadata) ->
-                manager.getBot().getNowplayingHandler().onStreamMetadataUpdate(gid, t, metadata));
+        {
+            streamDiagnostics.onSongChange(metadata);
+            manager.getBot().getNowplayingHandler().onStreamMetadataUpdate(gid, t, metadata);
+        });
     }
 
     private void stopStreamMetadata()
@@ -412,6 +419,7 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
         }
         metricsListener.onTrackEnd(trackTitle, trackUri);
         stopStreamMetadata();
+        streamDiagnostics.onTrackEnd(track, endReason);
 
         // Log track end with details for debugging
         if (endReason != AudioTrackEndReason.FINISHED) {
@@ -577,6 +585,8 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
             queue.addToHistory(startedTrack);
             updateResumeState(track);
             startStreamMetadata(track);
+            if (StreamReconnectPolicy.isLiveStream(track))
+                streamDiagnostics.onTrackStart(track);
         }
 
         if (lastReason == null)
@@ -697,6 +707,7 @@ public class AudioHandler extends AudioEventAdapter implements AudioSendHandler
         
         boolean frameAvailable = lastFrame != null;
         metricsListener.onFrameProvided(frameAvailable, latencyNanos);
+        streamDiagnostics.onFrame(frameAvailable, audioPlayer.isPaused());
 
         // Once a reconnected stream has played stably for a while, forget past failures so the
         // next drop starts from the shortest delay again.

@@ -2,7 +2,7 @@ name: Build and Test
 
 # Pre-merge gate: build and test every pull request targeting master.
 # Pushes to master are covered by auto-release.yml, which runs the same
-# build (with coverage) before it tags and publishes a release. Running this
+# build before it tags and publishes a release. Running this
 # workflow on master too would only duplicate that work.
 on:
   pull_request:
@@ -32,22 +32,8 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and Test with Coverage
+      - name: Build and Test
         run: |
           COMMIT_TIME=$(git log -1 --format=%cI)
-          mvn --batch-mode verify -Pcoverage -Dproject.build.outputTimestamp=$COMMIT_TIME
+          mvn --batch-mode verify -Dproject.build.outputTimestamp=$COMMIT_TIME
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          report_type: coverage
-          files: target/site/jacoco/jacoco.xml,target/site/jacoco-it/jacoco.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          report_type: test_results
-          token: ${{ secrets.CODECOV_TOKEN }}

@@ -288,6 +288,21 @@ voice {
 
 The bot rejoins the channel it was in (or the server's default voice channel if that one is gone) as long as something is still playing. A watchdog also checks every 30 seconds for a playing bot that is not in voice. Stopping playback with the bot's own commands never triggers a rejoin, so use `stop` when you want it to leave for good.
 
+### Diagnosing stream stutters
+
+The bot logs every audio gap of 200 ms or more on a live stream, with the amount of audio it had buffered in the five seconds before the gap:
+
+```
+[WARN] [StreamDiagnostics]: Stream audio gap in guild 123: 600 ms (30 frames missed). Buffer before the gap (oldest to newest, 0.5s apart): [2000, 2000, 1400, 600] ms of 2000 ms; buffer now 40 ms. DRAINED: ...
+```
+
+The last part classifies the gap:
+
+- **DRAINED**: audio was buffered and ran out. The station stopped delivering for longer than the buffer holds. Raise `performance.frameBufferMs`, or look at the station (crossfade settings, server load).
+- **NO CUSHION**: the buffer was already empty. A live stream arrives in real time, so once the initial burst from the server is used up the buffer does not refill by itself, and from then on every small pause in the stream is heard immediately.
+
+For a full picture, set `logging.streamDiagnostics = true` (or tick "Stream diagnostics" in the GUI's Config tab) and restart. This writes `stream-diagnostics.log` next to `config.txt` with millisecond timestamps and thread names, adds a stream health line every 30 seconds (buffer now/min/max, frames sent and missed), logs connects, first audio and station song changes, and turns on DEBUG output from lavaplayer's HTTP/MP3 reader and JDA's voice and gateway connections. The file rolls at 10 MB and keeps three old files. Turn it off again when you're done.
+
 ## Proxy Configuration
 
 JMusicBot supports granular proxy configuration, allowing you to route specific components through a proxy while letting others connect directly. This is useful when you need to proxy audio traffic (e.g., to bypass regional restrictions) without affecting Discord API communication.

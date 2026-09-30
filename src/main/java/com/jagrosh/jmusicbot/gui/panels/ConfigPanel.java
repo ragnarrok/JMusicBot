@@ -91,6 +91,7 @@ public class ConfigPanel extends JPanel {
     private final JCheckBox updateAlertsCheckBox;
     private final JComboBox<String> logLevelComboBox;
     private final JTextField playlistsFolderField;
+    private final JCheckBox streamDiagnosticsCheckBox;
     
     /**
      * Creates the configuration panel.
@@ -152,6 +153,7 @@ public class ConfigPanel extends JPanel {
         updateAlertsCheckBox = new JCheckBox("Alert owner about updates");
         logLevelComboBox = new JComboBox<>(new String[]{"off", "error", "warn", "info", "debug", "trace", "all"});
         playlistsFolderField = new JTextField(20);
+        streamDiagnosticsCheckBox = new JCheckBox("Stream diagnostics: verbose stream logging to stream-diagnostics.log");
         
         // Build UI
         JPanel contentPanel = new JPanel();
@@ -485,7 +487,7 @@ public class ConfigPanel extends JPanel {
     private JPanel createOtherSection() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(new TitledBorder("Other"));
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 150));
         
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4, 8, 4, 8);
@@ -512,6 +514,12 @@ public class ConfigPanel extends JPanel {
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         panel.add(playlistsFolderField, gbc);
+
+        // Row 3: Stream diagnostics
+        gbc.gridx = 0; gbc.gridy = 3;
+        gbc.gridwidth = 2;
+        gbc.fill = GridBagConstraints.NONE;
+        panel.add(streamDiagnosticsCheckBox, gbc);
         
         return panel;
     }
@@ -601,6 +609,7 @@ public class ConfigPanel extends JPanel {
         updateAlertsCheckBox.setSelected(config.useUpdateAlerts());
         logLevelComboBox.setSelectedItem(config.getLogLevel());
         playlistsFolderField.setText(config.getPlaylistsFolder());
+        streamDiagnosticsCheckBox.setSelected(config.streamDiagnostics());
     }
     
     /**
@@ -697,6 +706,7 @@ public class ConfigPanel extends JPanel {
         updates.put("updates.alerts", String.valueOf(updateAlertsCheckBox.isSelected()));
         updates.put("logging.level", quoteString((String) logLevelComboBox.getSelectedItem()));
         updates.put("paths.playlistsFolder", quoteString(playlistsFolderField.getText()));
+        updates.put("logging.streamDiagnostics", String.valueOf(streamDiagnosticsCheckBox.isSelected()));
         
         return updates;
     }

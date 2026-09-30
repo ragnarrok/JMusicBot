@@ -63,7 +63,7 @@ public class BotConfig {
             evalEngine, guiTheme;
     private boolean stayInChannel, songInGame, npImages, npMinimalMessage, npShowButtons, showNpProgressBar, updatealerts, useEval, dbots, useYouTubeOauth, guiEnabled;
     private boolean streamPersist, streamResumeOnRestart, streamMetadataEnabled;
-    private boolean voiceRejoinOnDisconnect;
+    private boolean voiceRejoinOnDisconnect, streamDiagnostics;
     private long voiceRejoinDelaySeconds;
     private int voiceRejoinMaxAttempts;
     private long streamReconnectDelaySeconds, streamReconnectMaxDelaySeconds, streamMetadataPollSeconds, streamReadTimeoutSeconds;
@@ -269,6 +269,7 @@ public class BotConfig {
         showNpProgressBar = NP_SHOW_PROGRESS_BAR.getBoolean(config);
         updatealerts = UPDATE_ALERTS.getBoolean(config);
         logLevel = LOG_LEVEL.getString(config);
+        streamDiagnostics = STREAM_DIAGNOSTICS.hasValue(config) && STREAM_DIAGNOSTICS.getBoolean(config);
         useEval = USE_EVAL.getBoolean(config);
         evalEngine = EVAL_ENGINE.getString(config);
         maxSeconds = MAX_SECONDS.getLong(config);
@@ -498,6 +499,14 @@ public class BotConfig {
 
     public String getLogLevel() {
         return logLevel;
+    }
+
+    /**
+     * Returns true if verbose live-stream diagnostics (extra log lines and stream-diagnostics.log)
+     * are enabled.
+     */
+    public boolean streamDiagnostics() {
+        return streamDiagnostics;
     }
 
     public boolean useEval() {

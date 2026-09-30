@@ -134,6 +134,15 @@ public class JMusicBot
         // Set log level from config
         ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME)).setLevel(
                 ch.qos.logback.classic.Level.toLevel(config.getLogLevel(), ch.qos.logback.classic.Level.INFO));
+
+        // Optional live-stream troubleshooting: detailed log file plus DEBUG for the stream path
+        if (config.streamDiagnostics())
+        {
+            java.nio.file.Path diagnosticsFile = com.jagrosh.jmusicbot.utils.OtherUtil.getPath(
+                    com.jagrosh.jmusicbot.utils.StreamDiagnosticsLogging.FILE_NAME);
+            com.jagrosh.jmusicbot.utils.StreamDiagnosticsLogging.enable(diagnosticsFile);
+            LOG.info("Stream diagnostics are ON: writing detailed stream logs to {}", diagnosticsFile.toAbsolutePath());
+        }
         
         // Single source of truth for GUI: combines -Dnogui and config gui.enabled.
         // This matches the logic in Bot.isNoGUI().

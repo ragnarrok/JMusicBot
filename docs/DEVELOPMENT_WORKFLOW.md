@@ -124,8 +124,6 @@ The `build-and-test.yml` workflow is the pre-merge gate. It runs on pull request
 **What it does:**
 - Compiles the project
 - Runs unit and integration tests
-- Generates code coverage reports
-- Uploads coverage to Codecov
 
 ### Docker Build
 
@@ -144,7 +142,7 @@ There is no separate `master` image build. Every release tag is the newest `mast
 
 The `auto-release.yml` workflow is the only workflow that runs on pushes to `master`. It runs on every push that touches code (documentation-only changes are ignored):
 
-1. Runs the full test suite with coverage, uploads coverage to Codecov and builds the JAR (`mvn verify -Pcoverage`)
+1. Runs the full test suite and builds the JAR (`mvn verify`)
 2. Picks the next version: the `pom.xml` version if no tag exists for it yet, otherwise the next free patch number
 3. Stamps that version into the build (the JAR reports it) without committing anything, and tags the merged commit `vX.Y.Z`
 4. Publishes a GitHub release with the JAR attached. The release notes are the description of the pull request that was merged (so write PR descriptions for users, not just reviewers), with a footer linking the README, the Docker image and the full changelog. A direct push without a PR falls back to the commit message.
